@@ -109,7 +109,7 @@ class MeetingService(object):
         meeting = query.filter(Meeting.id == meeting_id).first()
         return meeting
 
-    async def update_meeting(self, db: Session, meeting_id: str, meeting_data: MeetingCreate, current_user_id: str) -> Optional[Meeting]:
+    def update_meeting(self, db: Session, meeting_id: str, meeting_data: MeetingCreate, current_user_id: str) -> Optional[Meeting]:
         """Update a meeting"""
         from time import timezone
         # 查询用户角色
