@@ -32,7 +32,7 @@ from services.speech_service import SpeechService
 from services.email_service import EmailService
 from services.auth_dependencies import require_auth
 
-from services.service_models import User,  TranslationText, TranslationTextRequest
+from services.service_models import User,  TranscriptionText, TranslationTextRequest,TranscriptionTextResponse
 from schemas import MeetingCreate, MeetingResponse, TranscriptionCreate
 
 # 定义 Token 验证方案（Bearer Token）
@@ -307,7 +307,7 @@ async def translate_text_load(request: TranslationTextRequest, db: Session = Dep
             )
 
         # 创建新的翻译文本记录
-        translation_record = TranslationText(
+        translation_record = TranscriptionText(
             meeting_id=meeting_id,
             speaker_name=request.extract_conversation_data()['speakers'],
             text=request.extract_conversation_data()['full_text'],
@@ -421,9 +421,7 @@ async def upload_audio(
 
 # Get meeting transcriptions
 @router.get("/{meeting_id}/transcriptions")
-async def get_meeting_transcriptions(meeting_id: str, db: Session = Depends(get_db)) -> list[object]:
+async def get_meeting_transcriptions(meeting_id: str, db: Session = Depends(get_db)):
     """Get all transcriptions for a meeting"""
     transcriptions = await meeting_service.get_meeting_transcriptions(db, meeting_id)
     return transcriptions
-
-

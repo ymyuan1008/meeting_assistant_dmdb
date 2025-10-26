@@ -160,7 +160,7 @@ class UserStatus(str, Enum):
     SUSPENDED = "suspended"
 
 
-class TranslationText(Base):
+class TranscriptionText(Base):
     __tablename__ = "translation_texts"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -168,6 +168,10 @@ class TranslationText(Base):
     speaker_name = Column(String(100), nullable=True)  # 如果没有说话人信息可以设为可选
     text = Column(Text, nullable=False)  # 使用Text类型存储长文本
     created_time = Column(DateTime, default=datetime.utcnow)
+
+
+class TranscriptionTextResponse(TranscriptionText):
+    pass
 
 class GenderType(str, Enum):
     """性别类型枚举"""

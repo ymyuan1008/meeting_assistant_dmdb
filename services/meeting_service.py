@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
 
 # 自定义类
-from services.service_models import Meeting, Participant, Transcription, PersonSign, User
+from services.service_models import Meeting, Participant, Transcription, PersonSign, User, TranscriptionText
 from schemas import MeetingCreate, TranscriptionCreate, AttachmentCreate, Attachment
 
 
@@ -230,8 +230,8 @@ class MeetingService(object):
 
     async def get_meeting_transcriptions(self, db: Session, meeting_id: str) -> list[Transcription]:
         """Get all transcriptions for a meeting"""
-        return db.query(Transcription).filter(Transcription.meeting_id == meeting_id).order_by(
-            Transcription.timestamp.asc()).all()
+        return db.query(TranscriptionText).filter(TranscriptionText.meeting_id == meeting_id).order_by(
+            TranscriptionText.created_time.asc()).all()
 
     async def update_meeting_status(self, db: Session, meeting_id: str, status: str) -> bool:
         """Update meeting status"""
