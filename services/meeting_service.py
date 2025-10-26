@@ -74,10 +74,10 @@ class MeetingService(object):
         """Get all meetings - admin users see all, regular users see only their meetings"""
         # 查询用户角色
         try:
-            current_user_id_int = int(current_user_id)
+            current_user_id_str = str(current_user_id)
         except (TypeError, ValueError):
-            current_user_id_int = None
-        user_role = db.query(User.user_role).filter(User.id == current_user_id_int).scalar() if current_user_id_int is not None else None
+            current_user_id_str = None
+        user_role = db.query(User.user_role).filter(User.id == current_user_id_str).scalar() if current_user_id_str is not None else None
 
         query = db.query(Meeting)
 
@@ -95,15 +95,15 @@ class MeetingService(object):
         """Get a specific meeting by ID and validate user access using JOIN"""
         # 查询用户角色
         try:
-            current_user_id_int = int(current_user_id)
+            current_user_id_str = str(current_user_id)
         except (TypeError, ValueError):
-            current_user_id_int = None
-        user_role = db.query(User.user_role).filter(User.id == current_user_id_int).scalar() if current_user_id_int is not None else None
+            current_user_id_str = None
+        user_role = db.query(User.user_role).filter(User.id == current_user_id_str).scalar() if current_user_id_str is not None else None
         query = db.query(Meeting)
         # 如果不是管理员，添加参与者验证条件
         if user_role != "admin":
             query = query.join(Participant, Meeting.id == Participant.meeting_id).filter(
-                Participant.user_code == current_user_id)
+                Participant.user_code == current_user_id_str)
 
         # 添加会议ID过滤条件
         meeting = query.filter(Meeting.id == meeting_id).first()
@@ -114,15 +114,15 @@ class MeetingService(object):
         from time import timezone
         # 查询用户角色
         try:
-            current_user_id_int = int(current_user_id)
+            current_user_id_str = str(current_user_id)
         except (TypeError, ValueError):
-            current_user_id_int = None
+            current_user_id_str = None
 
         user_role = (
             db.query(User.user_role)
-            .filter(User.id == current_user_id_int)
+            .filter(User.id == current_user_id_str)
             .scalar()
-            if current_user_id_int is not None
+            if current_user_id_str is not None
             else None
         )
 
@@ -130,7 +130,7 @@ class MeetingService(object):
         print("当前角色", user_role)
         if user_role != "admin":
             query = query.join(Participant, Meeting.id == Participant.meeting_id).filter(
-                Participant.user_code == current_user_id)
+                Participant.user_code == current_user_id_str)
         meeting = query.filter(Meeting.id == meeting_id).first()
 
         if not meeting:
@@ -169,16 +169,16 @@ class MeetingService(object):
         """Delete a meeting"""
         # 查询用户角色
         try:
-            current_user_id_int = int(current_user_id)
+            current_user_id_str = str(current_user_id)
         except (TypeError, ValueError):
-            current_user_id_int = None
-        user_role = db.query(User.user_role).filter(User.id == current_user_id_int).scalar() if current_user_id_int is not None else None
+            current_user_id_str = None
+        user_role = db.query(User.user_role).filter(User.id == current_user_id_str).scalar() if current_user_id_str is not None else None
         query = db.query(Meeting)
         if user_role != "admin":
             query = (
                 query
                 .join(Participant, Meeting.id == Participant.meeting_id)
-                .filter(Participant.user_code == current_user_id)
+                .filter(Participant.user_code == current_user_id_str)
             )
         meeting = query.filter(Meeting.id == meeting_id).first()
         if not meeting:

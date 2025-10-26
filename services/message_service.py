@@ -1,7 +1,7 @@
 from typing import List
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from loguru import logger
 from datetime import datetime
 from pytz import timezone
@@ -172,11 +172,6 @@ class MessageService(object):
         Returns:
             int: 成功标记为已读的关联记录数量
         """
-        try:
-            rid_int = int(str(recipient_id))
-        except (TypeError, ValueError):
-            raise ValueError("recipient_id 必须是数字或可转换为数字的字符串")
-
         # 过滤并转换消息ID
         cast_message_ids: list[int] = []
         for mid in message_ids:
@@ -191,7 +186,7 @@ class MessageService(object):
         # 查询当前用户且未读的关联记录
         rows = await db.execute(
             select(MessageRecipient).where(
-                (MessageRecipient.recipient_id == rid_str) &
+                (MessageRecipient.recipient_id == recipient_id) &
                 (MessageRecipient.message_id.in_(cast_message_ids)) &
                 (MessageRecipient.is_read == False)
             )
@@ -239,6 +234,8 @@ class MessageService(object):
         if len(conditions) == 1:
             raise ValueError("必须提供 is_read 或 message_id 之一，以限制删除范围")
 
-        deleted = db.query(MessageRecipient).filter(*conditions).delete(synchronize_session=False)
+        result = await db.execute(
+            delete(MessageRecipient).where(*conditions)
+        )
         await db.commit()
-        return int(deleted)
+        return int(result.rowcount or 0)

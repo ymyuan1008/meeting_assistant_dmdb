@@ -75,11 +75,13 @@ async def sign(
     db: Session = Depends(get_db)
 ):
     """人员签到接口"""
-    user_id = int(current_user_id)
-    user = db.query(User).filter(User.id == user_id).first()
+    # 避免强制转整型，兼容UUID字符串ID
+    user = db.query(User).filter(User.id == current_user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在或ID不匹配")
     try:
         # 调用服务层的签到方法，传入姓名和数据库会话
-        result = await attendance_service.sign_person(db, user.name, meeting_id, user_id)
+        result = await attendance_service.sign_person(db, user.name, meeting_id, str(user.id))
         return result
     except ValueError as e:
         # 捕获服务层抛出的“未找到人员”异常

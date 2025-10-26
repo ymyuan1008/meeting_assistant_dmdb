@@ -52,18 +52,24 @@ def _extract_bearer_token(authorization: Optional[str]) -> str:
 # ============================= 认证相关 =============================
 @router.post("/auth/login", summary="用户登录", response_model=dict)
 async def login(payload: UserLogin, db: Session = Depends(get_db)):
-    """用户登录，返回access与refresh令牌"""
+    """用户登录，返回access与refresh令牌
+    返回规则：成功时 code=200；失败时仅返回 {code, message}，其中code为HTTP错误码数字，message为错误信息
+    """
     try:
         tokens = await auth_service.login_and_issue(db, payload.username, payload.password, user_service)
         if not tokens:
-            _raise(status.HTTP_401_UNAUTHORIZED, "用户名或密码错误", "auth_failed")
+            return {"code": status.HTTP_401_UNAUTHORIZED, "message": "用户名或密码错误"}
         access_token, refresh_token = tokens
-        return _resp({"access_token": access_token, "refresh_token": refresh_token})
-    except HTTPException:
-        raise
+        return _resp({"access_token": access_token, "refresh_token": refresh_token}, code=200)
+    except HTTPException as he:
+        # 统一错误响应为 {code, message}
+        msg = he.detail.get("message") if isinstance(he.detail, dict) else str(he.detail)
+        return {"code": he.status_code, "message": msg}
+    except ValueError as ve:
+        return {"code": status.HTTP_400_BAD_REQUEST, "message": str(ve)}
     except Exception as e:
         logger.error(f"登录异常: {e}")
-        _raise(status.HTTP_500_INTERNAL_SERVER_ERROR, "服务器内部错误", "server_error")
+        return {"code": status.HTTP_500_INTERNAL_SERVER_ERROR, "message": "服务器内部错误"}
 
 
 @router.post("/auth/logout", summary="用户登出", response_model=dict)
@@ -142,7 +148,6 @@ async def profile(current_user: User = Depends(require_auth)):
         _raise(status.HTTP_500_INTERNAL_SERVER_ERROR, "服务器内部错误", "server_error")
 
 
-# ============================= 公共接口 =============================
 @router.get("/public/users", summary="公共用户列表查询", response_model=dict)
 async def list_users_public(
     db: Session = Depends(get_db),
@@ -219,7 +224,6 @@ async def list_users_public(
         _raise(status.HTTP_500_INTERNAL_SERVER_ERROR, "服务器内部错误", "server_error")
 
 
-# ============================= 管理员用户管理 =============================
 @router.post("/users/", summary="创建用户", response_model=dict)
 async def create_user(
     payload: UserCreate,
@@ -252,7 +256,6 @@ async def create_user(
         _raise(status.HTTP_500_INTERNAL_SERVER_ERROR, "服务器内部错误", "server_error")
 
 
-# ============================= 用户注册（固定一般用户） =============================
 @router.post("/auth/register", summary="匿名用户注册（角色固定为一般用户）", response_model=dict)
 async def register_user(
     payload: UserCreate,
@@ -507,11 +510,12 @@ async def change_password(user_id: str, payload: PasswordChange, db: Session = D
     - 仅允许本人操作（非管理员）
     - 需提供旧密码验证
     - 禁止新密码与旧密码相同
+    返回规则：成功时 code=200；失败时 code 为对应HTTP错误码，message为错误信息
     """
     try:
         # 非管理员只能修改自己的密码
         if current_user.user_role != UserRole.ADMIN.value and str(current_user.id) != str(user_id):
-            _raise(status.HTTP_403_FORBIDDEN, "非管理员用户只能修改自己的密码", "forbidden")
+            return _resp(None, message="非管理员用户只能修改自己的密码", code=status.HTTP_403_FORBIDDEN)
 
         ok = await user_service.change_password(
             db=db,
@@ -521,14 +525,12 @@ async def change_password(user_id: str, payload: PasswordChange, db: Session = D
             operator_id=str(current_user.id)
         )
         if not ok:
-            _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
-        return _resp({"user_id": user_id, "changed": True})
-    except HTTPException:
-        raise
+            return _resp(None, message="用户不存在", code=status.HTTP_404_NOT_FOUND)
+        return _resp({"user_id": user_id, "changed": True}, code=200)
     except PermissionError as pe:
-        _raise(status.HTTP_403_FORBIDDEN, str(pe), "forbidden")
+        return _resp(None, message=str(pe), code=status.HTTP_403_FORBIDDEN)
     except ValueError as ve:
-        _raise(status.HTTP_400_BAD_REQUEST, str(ve), "bad_request")
+        return _resp(None, message=str(ve), code=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error(f"修改密码异常: {e}")
-        _raise(status.HTTP_500_INTERNAL_SERVER_ERROR, "服务器内部错误", "server_error")
+        return _resp(None, message="服务器内部错误", code=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -59,10 +59,10 @@ class SignInService(object):
 
         # 4. 无关联记录则创建（用数据库模型实例，而非Pydantic实例）
         if not user_meeting_sign:
-            # 错误修正：创建 PersonSign（数据库模型）实例，而非 PersonSignCreate（Pydantic模型）
+            # 创建当前会议的人员签到记录（与User.id对齐为字符串UUID）
             user_meeting_sign = PersonSign(
                 name=name,
-                user_code=int(user_id) if user_id is not None else None,
+                user_code=str(user_id) if user_id is not None else None,
                 meeting_id=meeting_id,
                 is_signed=False,  # 初始未签到
                 is_on_leave=False  # 初始未请假
@@ -127,7 +127,7 @@ class SignInService(object):
             user_meeting = PersonSign(
                 name=name,
                 meeting_id=meeting_id,
-                user_code=int(user_id) if user_id is not None else None,
+                user_code=str(user_id) if user_id is not None else None,
                 is_signed=False,
                 is_on_leave=False
             )

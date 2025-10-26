@@ -228,8 +228,8 @@ class User(Base):
 class PersonSign(Base):
     __tablename__ = "person_sign"
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(50),index=True)
-    user_code = Column(BigInteger, ForeignKey("users.id"), nullable=False)
+    name = Column(String(50), index=True)
+    user_code = Column(String(36), ForeignKey("users.id"), nullable=False)
     meeting_id = Column(String(50), ForeignKey("meetings.id"), nullable=False)
     is_signed = Column(Boolean, default=False)
     is_on_leave = Column(Boolean, default=False)
