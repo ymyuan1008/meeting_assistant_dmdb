@@ -12,7 +12,7 @@ from services.user_service import UserService
 from services.auth_service import AuthService
 from services.auth_dependencies import require_auth, require_admin
 from services.service_models import User, UserStatus, UserRole
-from schemas import UserLogin, UserCreate, UserUpdate, UserResponse, UserBasicResponse
+from schemas import UserLogin, UserCreate, UserUpdate, UserResponse,UserRegister, UserBasicResponse
 
 router = APIRouter(prefix="/api", tags=["Users & Auth"])
 
@@ -258,26 +258,42 @@ async def create_user(
 
 @router.post("/auth/register", summary="匿名用户注册（角色固定为一般用户）", response_model=dict)
 async def register_user(
-    payload: UserCreate,
+    payload: UserRegister,
     db: Session = Depends(get_db)
 ):
     """
     匿名用户注册接口：
+    - 姓名、账号、密码为必填项
+    - 其他字段为选填项
     - 角色强制设置为一般用户（user）
     - 创建人设置为 null（匿名注册）
     - 包含必要的参数校验与错误处理
     - 密码由服务层进行bcrypt哈希安全存储
     """
     try:
-        # 密码必填校验（与管理员创建不同，这里要求注册必须提供密码）
+        # 必填项校验
+        if not payload.name or not payload.name.strip():
+            _raise(status.HTTP_422_UNPROCESSABLE_ENTITY, "姓名为必填项", "validation_error")
+        if not payload.user_name or not payload.user_name.strip():
+            _raise(status.HTTP_422_UNPROCESSABLE_ENTITY, "账号为必填项", "validation_error")
         if not payload.password or not payload.password.strip():
-            _raise(status.HTTP_422_UNPROCESSABLE_ENTITY, "注册需提供有效密码", "validation_error")
+            _raise(status.HTTP_422_UNPROCESSABLE_ENTITY, "密码为必填项", "validation_error")
 
-        # 强制角色为一般用户
-        payload.user_role = UserRole.USER.value
-
+       
+        # 创建 UserCreate 对象而不是字典
+        user_create_data = UserCreate(
+            name=payload.name,
+            user_name=payload.user_name,
+            password=payload.password,
+            gender=payload.gender,
+            phone=payload.phone,
+            email=payload.email,
+            company=payload.company,
+            user_role=UserRole.USER.value,  # 强制角色为一般用户
+            status=UserStatus.ACTIVE.value  # 设置默认状态
+        )
         # 创建用户（匿名：creator=None）
-        user = await user_service.create_user(db, payload, created_by=None)
+        user = await user_service.create_user(db, user_create_data, created_by=None)
 
         # 构造响应
         user_data = UserResponse(
@@ -459,7 +475,7 @@ async def delete_user(user_id: str, hard: bool = Query(False, description="是�
     - hard=true：物理删除用户并清理相关引用
     """
     try:
-        ok = await user_service.delete_user(db, user_id, operator_id=str(current_user.id), hard=hard)
+        ok = user_service.delete_user(db, user_id, operator_id=str(current_user.id), hard=hard)
         if not ok:
             _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
         return _resp({"deleted": True, "hard": hard})

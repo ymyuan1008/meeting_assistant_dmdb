@@ -255,6 +255,60 @@ class UserCreate(UserBase):
 
         return v
 
+class UserRegister(BaseModel):
+    """
+    创建用户请求模型
+    用于用户注册的请求。
+    包含密码字段并进行强度验证。
+    Attributes:
+        user_name: 用户账号，必填
+        email: 邮箱，选填
+        password: 用户密码，必填；未提供时使用默认值 Test@1234
+    """
+    name: str = Field(..., min_length=1, max_length=100, description="用户姓名")
+    user_name: str = Field(..., min_length=3, max_length=50, description="用户账号")
+    password: str = Field(..., min_length=8, max_length=128, description="用户密码")
+    gender: Optional[str] = Field(None, description="性别")
+    phone: Optional[str] = Field(None, description="手机号码")
+    company: Optional[str] = Field(None, max_length=200, description="所属公司/单位")
+    email: Optional[EmailStr] = Field(None, description="邮箱地址")
+
+    @validator('user_name')
+    def validate_user_name(cls: Any, v: str) -> str:
+        """
+        验证用户账号格式：字母、数字、下划线、中划线，长度 3-50
+        """
+        v = v.strip()
+        if len(v) < 3 or len(v) > 50:
+            raise ValueError('用户名长度必须在3-50个字符之间')
+        if not re.match(r'^[a-zA-Z0-9_-]+$', v):
+            raise ValueError('用户名仅支持字母、数字、下划线和中划线')
+        return v
+
+    @validator('password')
+    def validate_password(cls: Any, v: str)-> str:
+        """
+        密码强度验证：
+        - 至少8位字符
+        - 包含大写字母、小写字母、数字和特殊字符中的至少3种
+        """
+        if v is None:
+            # 未提供密码时将由服务层使用默认密码
+            return v
+        if len(v) < 8:
+            raise ValueError('密码长度至少为8位')
+        # 检查密码复杂度
+        has_upper = bool(re.search(r'[A-Z]', v))
+        has_lower = bool(re.search(r'[a-z]', v))
+        has_digit = bool(re.search(r'\d', v))
+        has_special = bool(re.search(r'[!@#$%^&*(),.?":{}|<>]', v))
+
+        complexity_count = sum([has_upper, has_lower, has_digit, has_special])
+        if complexity_count < 3:
+            raise ValueError('密码必须包含大写字母、小写字母、数字和特殊字符中的至少3种')
+
+        return v
+
 
 class UserUpdate(BaseModel):
     """

@@ -10,9 +10,9 @@ logger = logging.getLogger(__name__)
 class ThirdPartyTokenService:
     def __init__(self):
         # 使用固定的配置值
-        self.app_id =  os.getenv("THIRD_PARTY_APP_ID", "your-app-id")
-        self.app_secret = os.getenv("THIRD_PARTY_APP_SECRET", "your-app-secret")
-        self.base_url = os.getenv("THIRD_PARTY_BASE_URL", "")
+        self.app_id =  os.getenv("THIRD_PARTY_APP_ID", "tainsureAssistant")
+        self.app_secret = os.getenv("THIRD_PARTY_APP_SECRET", "sek9*2JxL8K6p#Lp=ia!-yX@0H0DDoJDDR8d#YGjml!p")
+        self.base_url = os.getenv("THIRD_PARTY_BASE_URL", "https://ai.csg.cn/aihear-50-249")
         
         # 保存默认配置（用于可能的覆盖）
         self.default_app_id = self.app_id
@@ -73,15 +73,9 @@ class ThirdPartyTokenService:
         self.app_secret = app_secret or self.default_app_secret
         self.base_url = base_url or self.default_base_url
         
-        # 检查基础URL是否已设置
+        # 检查基础URL是否已设置，如果未设置则使用默认值，不再报错
         if not self.base_url:
-            logger.error("Base URL is not set")
-            return {
-                "code": "400",
-                "msg": "Base URL is not set",
-                "data": "",
-                "map": {}
-            }
+            self.base_url = self.default_base_url
         
         url = f"{self.base_url}/app/open/thridLogin"
         
