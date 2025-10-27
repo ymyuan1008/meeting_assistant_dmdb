@@ -311,10 +311,12 @@ async def translate_text_load(request: TranslationTextRequest, db: Session = Dep
         translation_record = TranscriptionText(
             meeting_id=meeting_id,
             other_meeting_id=other_meeting_id,
-            speaker_name=request.extract_conversation_data()['speakers'],
-            text=request.extract_conversation_data()['full_text'],
+            speaker_name=json.dumps(request.extract_conversation_data()['speakers'], ensure_ascii=False),
+            text_message=request.extract_conversation_data()['full_text'],
             created_time=datetime.now(pytz.timezone('Asia/Shanghai'))
         )
+
+
         # 添加到数据库
         db.add(translation_record)
         db.commit()
