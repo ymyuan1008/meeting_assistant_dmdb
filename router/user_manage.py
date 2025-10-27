@@ -6,6 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, status, Header, Query
 from sqlalchemy.orm import Session
 from loguru import logger
 
+# 添加加密模块导入
+from utils.encryption import rsa_encryption
+
 # 自定义模块
 from db.databases import DatabaseConfig, DatabaseSessionManager
 from services.user_service import UserService
@@ -56,7 +59,18 @@ async def login(payload: UserLogin, db: Session = Depends(get_db)):
     返回规则：成功时 code=200；失败时仅返回 {code, message}，其中code为HTTP错误码数字，message为错误信息
     """
     try:
-        tokens = await auth_service.login_and_issue(db, payload.username, payload.password, user_service)
+        # 密码已固定为加密格式，直接解密
+        username = payload.username
+        encrypted_password = payload.password
+        
+        try:
+            # 解密密码
+            password = rsa_encryption.decrypt(encrypted_password)
+        except Exception as e:
+            logger.error(f"密码解密失败: {e}")
+            return {"code": status.HTTP_400_BAD_REQUEST, "message": "密码解密失败"}
+        
+        tokens = await auth_service.login_and_issue(db, username, password, user_service)
         if not tokens:
             return {"code": status.HTTP_401_UNAUTHORIZED, "message": "用户名或密码错误"}
         access_token, refresh_token = tokens
@@ -279,12 +293,18 @@ async def register_user(
         if not payload.password or not payload.password.strip():
             _raise(status.HTTP_422_UNPROCESSABLE_ENTITY, "密码为必填项", "validation_error")
 
-       
+        # 解密密码
+        try:
+            password = rsa_encryption.decrypt(payload.password)
+        except Exception as e:
+            logger.error(f"密码解密失败: {e}")
+            _raise(status.HTTP_400_BAD_REQUEST, "密码解密失败", "decryption_error")
+
         # 创建 UserCreate 对象而不是字典
         user_create_data = UserCreate(
             name=payload.name,
             user_name=payload.user_name,
-            password=payload.password,
+            password=password,  # 使用解密后的密码
             gender=payload.gender,
             phone=payload.phone,
             email=payload.email,
@@ -550,3 +570,14 @@ async def change_password(user_id: str, payload: PasswordChange, db: Session = D
     except Exception as e:
         logger.error(f"修改密码异常: {e}")
         return _resp(None, message="服务器内部错误", code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@router.get("/auth/public-key", summary="获取RSA公钥", response_model=dict)
+async def get_public_key():
+    """获取RSA公钥用于密码加密"""
+    try:
+        public_key = rsa_encryption.get_public_key_pem()
+        return {"public_key": public_key}
+    except Exception as e:
+        logger.error(f"获取公钥失败: {e}")
+        raise HTTPException(status_code=500, detail="获取公钥失败")

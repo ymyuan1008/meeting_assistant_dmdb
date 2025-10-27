@@ -197,3 +197,10 @@ __marimo__/
 
 # Trae IDE
 .trae/
+
+# VSCode
+.vscode/
+
+# Cursor
+.Cursor/
+.cursor/
