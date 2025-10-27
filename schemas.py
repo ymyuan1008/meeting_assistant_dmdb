@@ -4,24 +4,21 @@ from typing import List, Optional, Any
 import re
 
 
-# ==================== 会议管理相关模型 ====================
-# 定义人员签到数据模型
-class PersonSignCreate(BaseModel):
-    name: str
-    user_code: Optional[str] = None
+# 新增附件模型
+class Attachment(BaseModel):
+    id: str
     meeting_id: str
-    is_signed: bool
-    is_on_leave: bool
+    file_name: str
+    file_path: str
+    file_size: int
+    content_type: str
+    uploaded_at: datetime
 
-class PersonSignResponse(BaseModel):
-    id: int
-    name: str
-    is_signed: bool
-    is_on_leave: bool
-
-    class Config(object):
-        from_attributes = True
-
+class AttachmentCreate(BaseModel):
+    file_name: str
+    file_path: str
+    file_size: int
+    content_type: str
 
 class ParticipantBase(BaseModel):
     name: str
@@ -44,22 +41,24 @@ class ParticipantResponse(ParticipantBase):
 
     class Config(object):
         from_attributes = True
-# 新增附件模型
-class Attachment(BaseModel):
-    id: str
+
+
+# 定义人员签到数据模型
+class PersonSignCreate(BaseModel):
+    name: str
+    user_code: Optional[str] = None
     meeting_id: str
-    file_name: str
-    file_path: str
-    file_size: int
-    content_type: str
-    uploaded_at: datetime
+    is_signed: bool
+    is_on_leave: bool
 
-class AttachmentCreate(BaseModel):
-    file_name: str
-    file_path: str
-    file_size: int
-    content_type: str
+class PersonSignResponse(BaseModel):
+    id: int
+    name: str
+    is_signed: bool
+    is_on_leave: bool
 
+    class Config(object):
+        from_attributes = True
 
 class MeetingBase(BaseModel):
     title: str
@@ -68,6 +67,7 @@ class MeetingBase(BaseModel):
     location: Optional[str] = None
     duration_minutes: int = 60
     agenda: Optional[str] = None
+
 
 class MeetingCreate(MeetingBase):
     participants: list[ParticipantCreate] = []
@@ -202,58 +202,6 @@ class UserBase(BaseModel):
             raise ValueError('用户状态必须为active、inactive或suspended')
         return v
 
-
-class UserCreate(UserBase):
-    """
-    创建用户请求模型
-    用于用户注册和管理员创建用户的请求。
-    包含密码字段并进行强度验证。
-    Attributes:
-        user_name: 用户账号，必填
-        role: 角色，选填，默认 user（admin/user）
-        email: 邮箱，选填
-        password: 用户密码，选填；未提供时使用默认值 Test@1234
-    """
-    user_name: str = Field(..., min_length=3, max_length=50, description="用户账号")
-    # 覆盖父类字段以满足创建用户必填/选填要求
-    email: Optional[EmailStr] = Field(None, description="邮箱地址")
-    password: Optional[str] = Field(None, min_length=8, max_length=128, description="用户密码")
-
-    @validator('user_name')
-    def validate_user_name(cls: Any, v: str) -> str:
-        """
-        验证用户账号格式：字母、数字、下划线、中划线，长度 3-50
-        """
-        v = v.strip()
-        if len(v) < 3 or len(v) > 50:
-            raise ValueError('用户名长度必须在3-50个字符之间')
-        if not re.match(r'^[a-zA-Z0-9_-]+$', v):
-            raise ValueError('用户名仅支持字母、数字、下划线和中划线')
-        return v
-
-    @validator('password')
-    def validate_password(cls: Any, v: str)-> str:
-        """
-        密码强度验证：
-        - 至少8位字符
-        - 包含大写字母、小写字母、数字和特殊字符中的至少3种
-        """
-        if v is None:
-            # 未提供密码时将由服务层使用默认密码
-            return v
-        if len(v) < 8:
-            raise ValueError('密码长度至少为8位')
-        # 检查密码复杂度
-        has_upper = bool(re.search(r'[A-Z]', v))
-        has_lower = bool(re.search(r'[a-z]', v))
-        has_digit = bool(re.search(r'\d', v))
-        has_special = bool(re.search(r'[!@#$%^&*(),.?":{}|<>]', v))
-
-        complexity_count = sum([has_upper, has_lower, has_digit, has_special])
-        if complexity_count < 3:
-            raise ValueError('密码必须包含大写字母、小写字母、数字和特殊字符中的至少3种')
-
-        return v
 
 class UserRegister(BaseModel):
     """
