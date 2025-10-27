@@ -475,7 +475,7 @@ async def delete_user(user_id: str, hard: bool = Query(False, description="是�
     - hard=true：物理删除用户并清理相关引用
     """
     try:
-        ok = await user_service.delete_user(db, user_id, operator_id=str(current_user.id), hard=hard)
+        ok = user_service.delete_user(db, user_id, operator_id=str(current_user.id), hard=hard)
         if not ok:
             _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
         return _resp({"deleted": True, "hard": hard})
