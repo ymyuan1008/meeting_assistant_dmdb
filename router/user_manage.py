@@ -544,7 +544,7 @@ from schemas import PasswordChange
 async def change_password(user_id: str, payload: PasswordChange, db: Session = Depends(get_db), current_user: User = Depends(require_auth)):
     """用户自助修改密码：
     - 仅允许本人操作（非管理员）
-    - 需提供旧密码验证
+    - 需提供旧密码验证（前端传入RSA加密密文，后端解密后校验）
     - 禁止新密码与旧密码相同
     返回规则：成功时 code=200；失败时 code 为对应HTTP错误码，message为错误信息
     """
@@ -553,11 +553,19 @@ async def change_password(user_id: str, payload: PasswordChange, db: Session = D
         if current_user.user_role != UserRole.ADMIN.value and str(current_user.id) != str(user_id):
             return _resp(None, message="非管理员用户只能修改自己的密码", code=status.HTTP_403_FORBIDDEN)
 
+        # 解密前端传入的旧/新密码（RSA-OAEP + SHA-256，Base64密文）
+        try:
+            old_password_plain = rsa_encryption.decrypt(payload.old_password)
+            new_password_plain = rsa_encryption.decrypt(payload.new_password)
+        except Exception as e:
+            logger.error(f"密码解密失败: {e}")
+            return _resp(None, message="密码解密失败", code=status.HTTP_400_BAD_REQUEST)
+
         ok = await user_service.change_password(
             db=db,
             user_id=user_id,
-            old_password=payload.old_password,
-            new_password=payload.new_password,
+            old_password=old_password_plain,
+            new_password=new_password_plain,
             operator_id=str(current_user.id)
         )
         if not ok:

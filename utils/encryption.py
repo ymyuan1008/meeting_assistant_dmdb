@@ -30,11 +30,7 @@ class RSAEncryption:
         plaintext_bytes = plaintext.encode('utf-8')
         ciphertext = self.public_key.encrypt(
             plaintext_bytes,
-            padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None
-            )
+            padding.PKCS1v15()  # 👈 保持一致
         )
         return base64.b64encode(ciphertext).decode('utf-8')
     
@@ -43,11 +39,7 @@ class RSAEncryption:
         ciphertext_bytes = base64.b64decode(ciphertext.encode('utf-8'))
         plaintext = self.private_key.decrypt(
             ciphertext_bytes,
-            padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None
-            )
+            padding.PKCS1v15()  # 👈 保持一致
         )
         return plaintext.decode('utf-8')
 
