@@ -263,7 +263,7 @@ class UserRegister(BaseModel):
     """
     name: str = Field(..., min_length=1, max_length=100, description="用户姓名")
     user_name: str = Field(..., min_length=3, max_length=50, description="用户账号")
-    password: str = Field(..., min_length=8, max_length=128, description="用户密码")
+    password: str = Field(..., min_length=8, max_length=500, description="用户密码")
     gender: Optional[str] = Field(None, description="性别")
     phone: Optional[str] = Field(None, description="手机号码")
     company: Optional[str] = Field(None, max_length=200, description="所属公司/单位")
@@ -316,7 +316,7 @@ class UserLogin(BaseModel):
         password: 密码，必填
     """
     username: str = Field(..., min_length=1, max_length=255, description="用户名（用户名、邮箱或手机号）")
-    password: str = Field(..., min_length=1, max_length=128, description="密码")
+    password: str = Field(..., min_length=1, max_length=500, description="密码")
 
     @validator('username')
     def validate_username(cls: Any, v: str)-> str:
@@ -383,8 +383,8 @@ class MessageForUserResponse(BaseModel):
 
 # 新增：用户密码修改请求模型
 class PasswordChange(BaseModel):
-    old_password: str = Field(..., min_length=8, max_length=128, description="旧密码")
-    new_password: str = Field(..., min_length=8, max_length=128, description="新密码")
+    old_password: str = Field(..., min_length=8, max_length=500, description="旧密码")
+    new_password: str = Field(..., min_length=8, max_length=500, description="新密码")
 
     @validator('new_password')
     def validate_new_password(cls: Any, v: str) -> str:
@@ -414,7 +414,7 @@ class UserCreate(UserBase):
     user_name: str = Field(..., min_length=3, max_length=50, description="用户账号")
     # 覆盖父类字段以满足创建用户必填/选填要求
     email: Optional[EmailStr] = Field(None, description="邮箱地址")
-    password: Optional[str] = Field(None, min_length=8, max_length=128, description="用户密码")
+    password: Optional[str] = Field(None, min_length=8, max_length=500, description="用户密码")
 
     @validator('user_name')
     def validate_user_name(cls: Any, v: str) -> str:
