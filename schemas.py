@@ -4,21 +4,24 @@ from typing import List, Optional, Any
 import re
 
 
-# 新增附件模型
-class Attachment(BaseModel):
-    id: str
+# ==================== 会议管理相关模型 ====================
+# 定义人员签到数据模型
+class PersonSignCreate(BaseModel):
+    name: str
+    user_code: Optional[str] = None
     meeting_id: str
-    file_name: str
-    file_path: str
-    file_size: int
-    content_type: str
-    uploaded_at: datetime
+    is_signed: bool
+    is_on_leave: bool
 
-class AttachmentCreate(BaseModel):
-    file_name: str
-    file_path: str
-    file_size: int
-    content_type: str
+class PersonSignResponse(BaseModel):
+    id: int
+    name: str
+    is_signed: bool
+    is_on_leave: bool
+
+    class Config(object):
+        from_attributes = True
+
 
 class ParticipantBase(BaseModel):
     name: str
@@ -41,24 +44,22 @@ class ParticipantResponse(ParticipantBase):
 
     class Config(object):
         from_attributes = True
-
-
-# 定义人员签到数据模型
-class PersonSignCreate(BaseModel):
-    name: str
-    user_code: Optional[str] = None
+# 新增附件模型
+class Attachment(BaseModel):
+    id: str
     meeting_id: str
-    is_signed: bool
-    is_on_leave: bool
+    file_name: str
+    file_path: str
+    file_size: int
+    content_type: str
+    uploaded_at: datetime
 
-class PersonSignResponse(BaseModel):
-    id: int
-    name: str
-    is_signed: bool
-    is_on_leave: bool
+class AttachmentCreate(BaseModel):
+    file_name: str
+    file_path: str
+    file_size: int
+    content_type: str
 
-    class Config(object):
-        from_attributes = True
 
 class MeetingBase(BaseModel):
     title: str
@@ -67,7 +68,6 @@ class MeetingBase(BaseModel):
     location: Optional[str] = None
     duration_minutes: int = 60
     agenda: Optional[str] = None
-
 
 class MeetingCreate(MeetingBase):
     participants: list[ParticipantCreate] = []
