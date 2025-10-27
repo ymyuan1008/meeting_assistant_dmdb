@@ -279,20 +279,21 @@ async def register_user(
         if not payload.password or not payload.password.strip():
             _raise(status.HTTP_422_UNPROCESSABLE_ENTITY, "密码为必填项", "validation_error")
 
-        
        
-        UserCreate = {
-            "name": payload.name,
-            "user_name": payload.user_name,
-            "password": payload.password,
-            "gender": payload.gender,
-            "phone": payload.phone,
-            "email": payload.email,
-            "company": payload.company,
-            "user_role": UserRole.USER.value, # 强制角色为一般用户
-        }
+        # 创建 UserCreate 对象而不是字典
+        user_create_data = UserCreate(
+            name=payload.name,
+            user_name=payload.user_name,
+            password=payload.password,
+            gender=payload.gender,
+            phone=payload.phone,
+            email=payload.email,
+            company=payload.company,
+            user_role=UserRole.USER.value,  # 强制角色为一般用户
+            status=UserStatus.ACTIVE.value  # 设置默认状态
+        )
         # 创建用户（匿名：creator=None）
-        user = await user_service.create_user(db, UserCreate, created_by=None)
+        user = await user_service.create_user(db, user_create_data, created_by=None)
 
         # 构造响应
         user_data = UserResponse(
