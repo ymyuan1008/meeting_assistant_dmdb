@@ -347,15 +347,7 @@ class UserService(object):
         - 硬删除(hard=True)：物理删除用户，并清理与用户相关的外键引用（置空）
         """
         try:
-            # 将字符串ID转换为整数以匹配 BigInteger 主键类型
-            try:
-                user_id_int = int(user_id)
-            except (TypeError, ValueError):
-                user_id_int = None
-            user = db.query(User).filter(User.id == (user_id_int if user_id_int is not None else user_id)).first()
-            if not user:
-                return False
-
+            user = db.query(User).filter(User.id == user_id).first()
             if not hard:
                 # 软删除：仅状态置为inactive
                 user.status = UserStatus.INACTIVE.value
@@ -365,24 +357,20 @@ class UserService(object):
                 db.commit()
                 logger.info(f"已软删除用户: {user_id}")
                 return True
-
-            # 硬删除：清理引用并物理删除
-            # 1) 清理会议记录中的 created_by / updated_by 引用（会议表中为 BigInteger）
-            if user_id_int is not None:
-                db.query(Meeting).filter(Meeting.created_by == user_id_int).update({Meeting.created_by: None})
-                db.query(Meeting).filter(Meeting.updated_by == user_id_int).update({Meeting.updated_by: None})
             else:
-                # 回退：如果无法解析为整数，尽量以字符串比较（兼容异常数据）
-                db.query(Meeting).filter(Meeting.created_by == user_id).update({Meeting.created_by: None})
-                db.query(Meeting).filter(Meeting.updated_by == user_id).update({Meeting.updated_by: None})
+                # 硬删除：清理引用并物理删除
+                # 1) 清理会议记录中的 created_by / updated_by 引用（会议表中为 BigInteger）
+                if user_id is not None:
+                    db.query(Meeting).filter(Meeting.created_by == user_id).update({Meeting.created_by: None})
+                    db.query(Meeting).filter(Meeting.updated_by == user_id).update({Meeting.updated_by: None})
 
-            # 2) 清理其他用户记录中的 created_by / updated_by 自引用（用户表中为 String）
-            db.query(User).filter(User.created_by == str(user_id)).update({User.created_by: None})
-            db.query(User).filter(User.updated_by == str(user_id)).update({User.updated_by: None})
+                # 2) 清理其他用户记录中的 created_by / updated_by 自引用（用户表中为 String）
+                db.query(User).filter(User.created_by == str(user_id)).update({User.created_by: None})
+                db.query(User).filter(User.updated_by == str(user_id)).update({User.updated_by: None})
 
-            # 3) 删除用户本身
-            db.delete(user)
-            db.commit()
+                # 3) 删除用户本身
+                db.delete(user)
+                db.commit()
             logger.info(f"已硬删除用户并清理引用: {user_id}")
             return True
         except Exception as e:
