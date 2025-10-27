@@ -290,6 +290,7 @@ async def translate_text_load(request: TranslationTextRequest, db: Session = Dep
     """
     try:
         meeting_id = request.meetingId
+        other_meeting_id = request.otherMeetingId
         translate_text = request.translateText
         speaker_name = request.speakerName
 
@@ -309,11 +310,11 @@ async def translate_text_load(request: TranslationTextRequest, db: Session = Dep
         # 创建新的翻译文本记录
         translation_record = TranscriptionText(
             meeting_id=meeting_id,
+            other_meeting_id=other_meeting_id,
             speaker_name=request.extract_conversation_data()['speakers'],
             text=request.extract_conversation_data()['full_text'],
             created_time=datetime.now(pytz.timezone('Asia/Shanghai'))
         )
-        print("提取文本", request.extract_conversation_data()['full_text'])
         # 添加到数据库
         db.add(translation_record)
         db.commit()
@@ -347,6 +348,11 @@ async def translate_text_load(request: TranslationTextRequest, db: Session = Dep
         if db:
             db.close()
 
+@router.get("/{meeting_id}/transcriptions")
+async def get_meeting_transcriptions(meeting_id: str, db: Session = Depends(get_db)):
+    """Get all transcriptions for a meeting"""
+    transcriptions = await meeting_service.get_meeting_transcriptions(db, meeting_id)
+    return transcriptions
 
 
 # Upload audio file for transcription
@@ -420,8 +426,4 @@ async def upload_audio(
 
 
 # Get meeting transcriptions
-@router.get("/{meeting_id}/transcriptions")
-async def get_meeting_transcriptions(meeting_id: str, db: Session = Depends(get_db)):
-    """Get all transcriptions for a meeting"""
-    transcriptions = await meeting_service.get_meeting_transcriptions(db, meeting_id)
-    return transcriptions
+

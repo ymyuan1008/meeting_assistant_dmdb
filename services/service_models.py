@@ -90,6 +90,7 @@ class TranslateTextContent(BaseModel):
 
 class TranslationTextRequest(BaseModel):
     meetingId: str
+    otherMeetingId: str
     translateText: Union[str, Dict[str, Any], TranslateTextContent]
     speakerName: str = Field(default="")
 
@@ -165,6 +166,7 @@ class TranscriptionText(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     meeting_id = Column(String(100), nullable=False, index=True)
+    other_meeting_id = Column(String(100), nullable=False)
     speaker_name = Column(String(100), nullable=True)  # 如果没有说话人信息可以设为可选
     text = Column(Text, nullable=False)  # 使用Text类型存储长文本
     created_time = Column(DateTime, default=datetime.utcnow)
