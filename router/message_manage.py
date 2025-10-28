@@ -1,6 +1,3 @@
-# 标准库
-from typing import Optional
-
 # 第三方库
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession

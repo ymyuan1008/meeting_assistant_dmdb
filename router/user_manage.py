@@ -488,17 +488,16 @@ async def update_user(user_id: str, payload: UserUpdate, db: Session = Depends(g
         _raise(status.HTTP_500_INTERNAL_SERVER_ERROR, "服务器内部错误", "server_error")
 
 
-@router.delete("/users/{user_id}", summary="删除用户(软/硬删除)", response_model=dict)
-async def delete_user(user_id: str, hard: bool = Query(False, description="是否执行硬删除(物理删除并清理引用)"), db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
-    """删除用户（管理员权限）
-    - 默认软删除：将用户状态置为inactive
-    - hard=true：物理删除用户并清理相关引用
+@router.delete("/users/{user_id}", summary="删除用户（硬删除）", response_model=dict)
+async def delete_user(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+    """删除用户（管理员权限，硬删除）
+    - 物理删除用户并清理相关外键引用（置空）
     """
     try:
-        ok = user_service.delete_user(db, user_id, operator_id=str(current_user.id), hard=hard)
+        ok = user_service.delete_user(db, user_id, operator_id=str(current_user.id))
         if not ok:
             _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
-        return _resp({"deleted": True, "hard": hard})
+        return _resp({"deleted": True})
     except HTTPException:
         raise
     except Exception as e:
@@ -553,7 +552,7 @@ async def change_password(user_id: str, payload: PasswordChange, db: Session = D
         if current_user.user_role != UserRole.ADMIN.value and str(current_user.id) != str(user_id):
             return _resp(None, message="非管理员用户只能修改自己的密码", code=status.HTTP_403_FORBIDDEN)
 
-        # 解密前端传入的旧/新密码（RSA-OAEP + SHA-256，Base64密文）
+        # 解密前端传入的旧/新密码（RSA-PKCS#1 v1.5，Base64密文）
         try:
             old_password_plain = rsa_encryption.decrypt(payload.old_password)
             new_password_plain = rsa_encryption.decrypt(payload.new_password)

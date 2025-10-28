@@ -90,7 +90,7 @@ class ThirdPartyTokenService:
                     # 输出响应正文，方便排查 401/403 等问题
                     logger.error(f"Third party API request failed with status code: {response.status_code}, body: {response.text}")
                     return {
-                        "code": str(response.status_code),
+                        "code": response.status_code,
                         "msg": f"Third party API request failed: {response.status_code}",
                         "data": "",
                         "map": {}
@@ -102,18 +102,27 @@ class ThirdPartyTokenService:
                 except Exception:
                     logger.error(f"Third party API returned non-JSON body: {response.text}")
                     return {
-                        "code": "500",
+                        "code": 500,
                         "msg": "Third party API returned non-JSON body",
                         "data": "",
                         "map": {}
                     }
                 
                 # 兼容字符串或数字类型的业务 code
-                resp_code = str(response_data.get("code"))
-                if resp_code != "200":
-                    logger.error(f"Third party API business error: code={response_data.get('code')}, message={response_data.get('message', 'Unknown error')}")
+                # 兼容字符串或数字类型的业务 code，并统一为整数
+                raw_code = response_data.get("code")
+                try:
+                    business_code = int(str(raw_code))
+                except Exception:
+                    business_code = 500
+
+                if business_code != 200:
+                    logger.error(
+                        f"Third party API business error: code={response_data.get('code')}, "
+                        f"message={response_data.get('message', 'Unknown error')}"
+                    )
                     return {
-                        "code": response_data.get("code", "500"),
+                        "code": business_code,
                         "msg": response_data.get("message", "Unknown business error"),
                         "data": "",
                         "map": {}
@@ -124,7 +133,7 @@ class ThirdPartyTokenService:
                 if not token:
                     logger.error("Token not found in response data")
                     return {
-                        "code": "500",
+                        "code": 500,
                         "msg": "Token not found in response",
                         "data": "",
                         "map": {}
@@ -132,7 +141,7 @@ class ThirdPartyTokenService:
                 
                 # 返回成功结果
                 return {
-                    "code": "200",
+                    "code": 200,
                     "msg": "request success",
                     "data": token,
                     "map": {}
@@ -141,7 +150,7 @@ class ThirdPartyTokenService:
         except httpx.TimeoutException:
             logger.error("Third party API request timeout")
             return {
-                "code": "408",
+                "code": 408,
                 "msg": "Request to third party API timed out",
                 "data": "",
                 "map": {}
@@ -149,7 +158,7 @@ class ThirdPartyTokenService:
         except httpx.NetworkError:
             logger.error("Network error occurred when requesting third party API")
             return {
-                "code": "503",
+                "code": 503,
                 "msg": "Network error occurred when requesting third party API",
                 "data": "",
                 "map": {}
@@ -157,7 +166,7 @@ class ThirdPartyTokenService:
         except Exception as e:
             logger.error(f"Unexpected error when requesting third party API: {str(e)}")
             return {
-                "code": "500",
+                "code": 500,
                 "msg": f"Unexpected error: {str(e)}",
                 "data": "",
                 "map": {}
