@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytz
 from datetime import datetime, timezone, timedelta
 
+
 #第三方库
 from docx.shared import Inches, Pt
 from docx.enum.table import WD_TABLE_ALIGNMENT
@@ -25,6 +26,17 @@ from reportlab.pdfbase.ttfonts import TTFont
 
 # 自定义库
 from services.service_models import Meeting, Transcription
+from db.minio_upload import MinioUploader
+
+uploader = MinioUploader(
+    os.getenv('MINIO_ENDPOINT'),
+    access_key=os.getenv('MINIO_ACCESS_KEY'),
+    secret_key=os.getenv('MINIO_SECRET_KEY'),
+    secure=os.getenv('MINIO_SECURE', 'False').lower() == 'true'
+)
+
+console_address = os.getenv('MINIO_CONSOLE_ADDRESS')
+bucket_name = "meeting-minutes"
 
 
 TABLE_STYLE = 'Table Grid'
@@ -290,12 +302,13 @@ class DocumentService(object):
     async def generate_minutes(self, meeting: Meeting, transcriptions: list[Transcription]) ->  dict[str, str]:
         """Generate meeting minutes document"""
         # Generate PDF document
-        pdf_path = await self._generate_minutes_pdf(meeting, transcriptions)
+        #pdf_path = await self._generate_minutes_pdf(meeting, transcriptions)
 
         # Generate Word document
         word_path = await self._generate_minutes_word(meeting, transcriptions)
 
-        return {"word": word_path, "pdf": pdf_path}
+        #return {"word": word_path, "pdf": pdf_path}
+        return {"word": word_path}
 
     async def _generate_minutes_pdf(self, meeting: Meeting, transcriptions: list[Transcription]) -> str:
         """Generate PDF format meeting minutes"""
@@ -660,9 +673,17 @@ class DocumentService(object):
     def _save_document(self, doc: Document, meeting: Meeting) -> str:
         """保存文档并返回文件路径"""
         filename = f"meeting_minutes_{meeting.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+        object_name = f"meeting_minutes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
         filepath = os.path.join(self.output_dir, filename)
         doc.save(filepath)
-        return filepath
+        csv_file_path = filepath
+        object_name = object_name
+
+        minio_path, presigned_url = uploader.upload_file(console_address, bucket_name, csv_file_path, object_name)
+        if minio_path and presigned_url:
+            print(f"文件已上传，MinIO 路径: {minio_path}")
+            print(f"预签名 URL: {presigned_url}")
+        return presigned_url
 
 
 
