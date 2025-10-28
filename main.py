@@ -75,9 +75,11 @@ API_PORT = int(os.getenv("API_PORT", 8000))
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
 # CORS 配置
-cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3000")
-origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
-
+if DEBUG:
+    origins = ["*"]  # 开发模式下允许所有来源（包括 file:// 的 null origin）
+else:
+    cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3000")
+    origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
