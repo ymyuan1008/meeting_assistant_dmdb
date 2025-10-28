@@ -326,7 +326,7 @@ class DocumentService(object):
                 'CustomTitle',
                 parent=styles['Heading1'],
                 fontSize=18,
-                spaceAfter=30,
+                spaceAfter=20,
                 alignment=1,
                 fontName=chinese_font_name
             ),
@@ -428,9 +428,9 @@ class DocumentService(object):
 
     def _format_transcription_content(self, transcription: Transcription) -> str:
         """格式化转录内容"""
-        timestamp = self._convert_to_east8_time(transcription.timestamp).strftime('%H:%M:%S')
-        speaker = transcription.speaker_name or transcription.speaker_id
-        content = f"[{timestamp}] {speaker}: {transcription.text}"
+        timestamp = self._convert_to_east8_time(transcription.created_time).strftime('%H:%M:%S')
+        speaker = transcription.speaker_id
+        content = f"[{timestamp}] {speaker}: {transcription.text_message}"
 
         if transcription.is_action_item:
             content += " [行动项]"
@@ -450,7 +450,7 @@ class DocumentService(object):
         story.append(Paragraph("行动项汇总", heading_style))
 
         for i, item in enumerate(action_items, 1):
-            story.append(Paragraph(f"{i}. {item.text}", normal_style))
+            story.append(Paragraph(f"{i}. {item.text_message}", normal_style))
             story.append(Spacer(1, 6))
 
     def _add_decisions_section(self, story: list, transcriptions: list[Transcription],
@@ -464,7 +464,7 @@ class DocumentService(object):
         story.append(Paragraph("重要决议", heading_style))
 
         for i, decision in enumerate(decisions, 1):
-            story.append(Paragraph(f"{i}. {decision.text}", normal_style))
+            story.append(Paragraph(f"{i}. {decision.text_message}", normal_style))
             story.append(Spacer(1, 6))
 
     def _add_footer_section(self, story: list, normal_style: ParagraphStyle) -> None:
@@ -617,7 +617,7 @@ class DocumentService(object):
         current_speaker = None
         for transcription in transcriptions:
             if transcription.speaker_name != current_speaker:
-                current_speaker = transcription.speaker_name or transcription.speaker_id
+                current_speaker = transcription.speaker_id
                 doc.add_heading(f'{current_speaker}:', level=3)
 
             self._add_transcription_paragraph(doc, transcription)
@@ -625,14 +625,10 @@ class DocumentService(object):
     def _add_transcription_paragraph(self, doc: Document, transcription: Transcription) -> None:
         """添加单个转录段落"""
 
-        timestamp = self._convert_to_east8_time(transcription.timestamp).strftime('%H:%M:%S')
-        paragraph = doc.add_paragraph(f'[{timestamp}] {transcription.text}')
+        timestamp = self._convert_to_east8_time(transcription.created_time).strftime('%H:%M:%S')
+        paragraph = doc.add_paragraph(f'[{timestamp}] {transcription.text_message}')
 
-        # 高亮行动项和决议
-        if transcription.is_action_item:
-            paragraph.add_run(' [行动项]').bold = True
-        if transcription.is_decision:
-            paragraph.add_run(' [决议]').bold = True
+
 
 
     def _add_action_items_summary(self, doc: Document, transcriptions: list[Transcription]) -> None:
@@ -643,7 +639,7 @@ class DocumentService(object):
 
         doc.add_heading('行动项汇总', level=1)
         for i, item in enumerate(action_items, 1):
-            doc.add_paragraph(f'{i}. {item.text}', style='List Number')
+            doc.add_paragraph(f'{i}. {item.text_message}', style='List Number')
 
     def _add_decisions_summary(self, doc: Document, transcriptions: list[Transcription]) -> None:
         """添加决议汇总"""
@@ -653,7 +649,7 @@ class DocumentService(object):
 
         doc.add_heading('重要决议', level=1)
         for i, decision in enumerate(decisions, 1):
-            doc.add_paragraph(f'{i}. {decision.text}', style='List Number')
+            doc.add_paragraph(f'{i}. {decision.text_message}', style='List Number')
 
     def _add_document_footer(self, doc: Document) -> None:
         """添加文档页脚"""

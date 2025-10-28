@@ -32,7 +32,7 @@ from services.speech_service import SpeechService
 from services.email_service import EmailService
 from services.auth_dependencies import require_auth
 
-from services.service_models import User,  TranscriptionText, TranslationTextRequest,TranscriptionTextResponse
+from services.service_models import User,  TranscriptionText, TranslationTextRequest,TranscriptionTextResponse, Transcription
 from schemas import MeetingCreate, MeetingResponse, TranscriptionCreate
 
 
@@ -217,7 +217,7 @@ async def generate_minutes(meeting_id: str,
         if not meeting:
             raise HTTPException(status_code=404, detail=MEETING_NOT_FOUND_DETAIL)
 
-        transcriptions = await meeting_service.get_meeting_transcriptions(db, meeting_id)
+        transcriptions = await meeting_service.get_transcription_message(db, meeting_id)
         doc_path = await document_service.generate_minutes(meeting, transcriptions)
         return {"document_path": doc_path, "message": "Meeting minutes generated successfully"}
     except Exception as e:
@@ -242,9 +242,6 @@ async def send_notification(meeting_id: str, db: Session = Depends(get_db))-> di
             raise HTTPException(status_code=500, detail="Failed to send emails")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-
-# 消息模型
 
 
 # 后台任务：连接外部 wss 服务并接收消息
@@ -295,6 +292,19 @@ async def translate_text_load(request: TranslationTextRequest, db: Session = Dep
         db.commit()
         db.refresh(translation_record)
         logger.info(f"成功保存翻译文本，会议ID: {meeting_id}, 记录ID: {translation_record.id}")
+
+        # 创建新的翻译文本记录
+        translation_text = Transcription(
+            meeting_id=meeting_id,
+            speaker_name=json.dumps(request.extract_conversation_data()['speakers'], ensure_ascii=False),
+            text_message=request.extract_conversation_data()['full_text'],
+            created_time=datetime.now(pytz.timezone('Asia/Shanghai'))
+        )
+
+        # 添加到数据库
+        db.add(translation_text)
+        db.commit()
+        db.refresh(translation_text)
 
         return {
             "code": 200,

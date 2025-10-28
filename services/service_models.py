@@ -294,11 +294,11 @@ class Transcription(Base):
     meeting_id = Column(String(50), ForeignKey("meetings.id"), nullable=False)
     speaker_id = Column(String(50), nullable=False)
     speaker_name = Column(String(50))
-    text = Column(Text, nullable=False)
-    timestamp = Column(DateTime(timezone=True), default=func.utcnow(), nullable=False)
-    confidence_score = Column(Integer, default=100)
+    text_message = Column(Text, nullable=False)
+    created_time = Column(DateTime(timezone=True), default=func.utcnow(), nullable=False)
     is_action_item = Column(Boolean, default=False)
     is_decision = Column(Boolean, default=False)
+
 
     meeting = relationship("Meeting", back_populates="transcriptions")
 

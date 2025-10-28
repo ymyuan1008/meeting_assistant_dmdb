@@ -233,6 +233,11 @@ class MeetingService(object):
         return db.query(TranscriptionText).filter(TranscriptionText.meeting_id == meeting_id).order_by(
             TranscriptionText.created_time.asc()).all()
 
+    async def get_transcription_message(self, db: Session, meeting_id: str) -> list[Transcription]:
+        """Get all transcriptions for a meeting"""
+        return db.query(Transcription).filter(Transcription.meeting_id == meeting_id).order_by(
+            Transcription.created_time.asc()).all()
+
     async def update_meeting_status(self, db: Session, meeting_id: str, status: str) -> bool:
         """Update meeting status"""
         from time import timezone
