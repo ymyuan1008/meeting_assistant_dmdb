@@ -422,7 +422,12 @@ class UserCreate(UserBase):
     # 覆盖父类字段以满足创建用户必填/选填要求
     email: Optional[EmailStr] = Field(None, description="邮箱地址")
     password: Optional[str] = Field(None, min_length=8, max_length=500, description="用户密码")
-
+    # 将可选字段的空字符串自动转换为 None，避免格式校验错误
+    @validator('email', 'phone', 'gender', 'company',"password", pre=True)
+    def empty_str_to_none(cls: Any, v: Any) -> Any:
+        if isinstance(v, str) and v.strip() == '':
+            return None
+        return v
     @validator('user_name')
     def validate_user_name(cls: Any, v: str) -> str:
         """

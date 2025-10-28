@@ -340,41 +340,35 @@ class UserService(object):
     def delete_user(self,
                           db: Session,
                           user_id: str,
-                          operator_id: Optional[str] = None,
-                          hard: bool = False) -> bool:
-        """删除用户
-        - 默认软删除：将用户状态置为 inactive
-        - 硬删除(hard=True)：物理删除用户，并清理与用户相关的外键引用（置空）
+                          operator_id: Optional[str] = None) -> bool:
+        """删除用户（仅硬删除）
+        - 物理删除用户，并清理与用户相关的外键引用（置空）
         """
         try:
             user = db.query(User).filter(User.id == user_id).first()
-            if not hard:
-                # 软删除：仅状态置为inactive
-                user.status = UserStatus.INACTIVE.value
-                if operator_id:
-                    user.updated_by = operator_id
-                user.updated_at = datetime.now(pytz.timezone('Asia/Shanghai'))
-                db.commit()
-                logger.info(f"已软删除用户: {user_id}")
-                return True
-            else:
-                # 硬删除：清理引用并物理删除
-                # 1) 清理会议记录中的 created_by / updated_by 引用（会议表中为 BigInteger）
-                if user_id is not None:
-                    db.query(Meeting).filter(Meeting.created_by == user_id).update({Meeting.created_by: None})
-                    db.query(Meeting).filter(Meeting.updated_by == user_id).update({Meeting.updated_by: None})
+            if not user:
+                return False
 
-                # 2) 清理其他用户记录中的 created_by / updated_by 自引用（用户表中为 String）
-                db.query(User).filter(User.created_by == str(user_id)).update({User.created_by: None})
-                db.query(User).filter(User.updated_by == str(user_id)).update({User.updated_by: None})
+            # 清理会议记录中的 created_by / updated_by 引用
+            if user_id is not None:
+                db.query(Meeting).filter(Meeting.created_by == user_id).update({Meeting.created_by: None})
+                db.query(Meeting).filter(Meeting.updated_by == user_id).update({Meeting.updated_by: None})
 
-                # 3) 删除用户本身
-                db.delete(user)
-                db.commit()
-            logger.info(f"已硬删除用户并清理引用: {user_id}")
+            # 清理其他用户记录中的 created_by / updated_by 自引用
+            db.query(User).filter(User.created_by == str(user_id)).update({User.created_by: None})
+            db.query(User).filter(User.updated_by == str(user_id)).update({User.updated_by: None})
+
+            # 删除用户本身
+            db.delete(user)
+            db.commit()
+
+            try:
+                logger.info(f"已硬删除用户并清理引用: operator_id={operator_id} target_id={user_id}")
+            except Exception:
+                pass
             return True
         except Exception as e:
-            logger.error(f"删除用户失败(id={user_id}, hard={hard}): {e}")
+            logger.error(f"删除用户失败(id={user_id}): {e}")
             db.rollback()
             raise e
 
