@@ -475,3 +475,18 @@ class UserUpdate(BaseModel):
     company: Optional[str] = Field(None, max_length=200, description="所属公司/单位")
     user_role: Optional[str] = Field(None, description="用户角色")
     status: Optional[str] = Field(None, description="用户状态")
+
+# 转译文本模型
+class TranslationItem(BaseModel):
+    text: str
+    source_lang: str
+    target_lang: str
+    translated_text: str
+    confidence: Optional[float] = None
+    metadata: Optional[dict[str, Any]] = None
+
+class TranslationBatch(BaseModel):
+    items: list[TranslationItem]
+    batch_id: Optional[str] = None
+    user_id: Optional[str] = None
+    session_id: Optional[str] = None
