@@ -204,3 +204,4 @@ __marimo__/
 # Cursor
 .Cursor/
 .cursor/
+keys/*.pem
