@@ -312,7 +312,7 @@ async def translate_text_load(request: TranslationTextRequest, db: Session = Dep
             meeting_id=meeting_id,
             other_meeting_id=other_meeting_id,
             speaker_name=json.dumps(request.extract_conversation_data()['speakers'], ensure_ascii=False),
-            text_message=request.extract_conversation_data()['full_text'],
+            text_message=json.dumps(request.translateText, ensure_ascii=False),
             created_time=datetime.now(pytz.timezone('Asia/Shanghai'))
         )
 
