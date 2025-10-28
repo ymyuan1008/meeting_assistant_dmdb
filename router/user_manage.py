@@ -553,7 +553,7 @@ async def change_password(user_id: str, payload: PasswordChange, db: Session = D
         if current_user.user_role != UserRole.ADMIN.value and str(current_user.id) != str(user_id):
             return _resp(None, message="非管理员用户只能修改自己的密码", code=status.HTTP_403_FORBIDDEN)
 
-        # 解密前端传入的旧/新密码（RSA-OAEP + SHA-256，Base64密文）
+        # 解密前端传入的旧/新密码（RSA-PKCS#1 v1.5，Base64密文）
         try:
             old_password_plain = rsa_encryption.decrypt(payload.old_password)
             new_password_plain = rsa_encryption.decrypt(payload.new_password)

@@ -269,6 +269,13 @@ class UserRegister(BaseModel):
     company: Optional[str] = Field(None, max_length=200, description="所属公司/单位")
     email: Optional[EmailStr] = Field(None, description="邮箱地址")
 
+    # 将可选字段的空字符串自动转换为 None，避免格式校验错误
+    @validator('email', 'phone', 'gender', 'company', pre=True)
+    def empty_str_to_none(cls: Any, v: Any) -> Any:
+        if isinstance(v, str) and v.strip() == '':
+            return None
+        return v
+
     @validator('user_name')
     def validate_user_name(cls: Any, v: str) -> str:
         """
