@@ -35,8 +35,7 @@ from services.auth_dependencies import require_auth
 from services.service_models import User,  TranscriptionText, TranslationTextRequest,TranscriptionTextResponse
 from schemas import MeetingCreate, MeetingResponse, TranscriptionCreate
 
-# 定义 Token 验证方案（Bearer Token）
-security = HTTPBearer()
+
 
 router = APIRouter(prefix="/api/meetings", tags=["Mettings"])
 # 获取东八区当前时间
@@ -245,33 +244,7 @@ async def send_notification(meeting_id: str, db: Session = Depends(get_db))-> di
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# 复用 AsyncClient（避免每次调用创建新连接，提升性能）
-async_client = AsyncClient(timeout=5)
-# Token 验证（你的服务对客户端的验证）
-security = HTTPBearer()
-
-# 外部 wss 地址（目标服务）
-EXTERNAL_WSS_URL = (
-    "wss://ai.csg.cn/aihear-50-249/app/hisee/websocket/storage/57fb5931-f776-4b18-be59-a137f706a949"
-    "?appid=tainsureAssistant,uid=555fd741-5023-4ea8-84ff-b702a087137b,ack=1,pk_on=1"
-)
-EXTERNAL_ACCESS_TOKEN = "6c0a12ed344841859e486e46fbe1b881"
-
-
 # 消息模型
-class TranslationItem(BaseModel):
-    text: str
-    source_lang: str
-    target_lang: str
-    translated_text: str
-    confidence: Optional[float] = None
-    metadata: Optional[dict[str, Any]] = None
-
-class TranslationBatch(BaseModel):
-    items: list[TranslationItem]
-    batch_id: Optional[str] = None
-    user_id: Optional[str] = None
-    session_id: Optional[str] = None
 
 
 # 后台任务：连接外部 wss 服务并接收消息
@@ -350,6 +323,7 @@ async def translate_text_load(request: TranslationTextRequest, db: Session = Dep
         if db:
             db.close()
 
+# Get meeting transcriptions
 @router.get("/{meeting_id}/transcriptions")
 async def get_meeting_transcriptions(meeting_id: str, db: Session = Depends(get_db)):
     """Get all transcriptions for a meeting"""
@@ -427,5 +401,5 @@ async def upload_audio(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# Get meeting transcriptions
+
 
