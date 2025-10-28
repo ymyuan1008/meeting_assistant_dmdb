@@ -639,9 +639,19 @@ class DocumentService(object):
         """添加单个转录段落"""
 
         timestamp = self._convert_to_east8_time(transcription.created_time).strftime('%H:%M:%S')
-        paragraph = doc.add_paragraph(f'[{timestamp}] {transcription.text_message}')
+        print("--------------------------------------------")
+        # 处理转译文本
+        if '👤' in transcription.text_message:
+            # 按说话人标识分割并过滤空字符串
+            parts = [part.strip() for part in transcription.text_message.split('👤') if part.strip()]
 
-
+            for part in parts:
+                # 移除双引号并创建段落
+                cleaned_text = part.replace('"', '')
+                paragraph = doc.add_paragraph(f'[{timestamp}]  {cleaned_text}')
+        else:
+            # 如果没有明确的分割，保持原样
+            paragraph = doc.add_paragraph(f'[{timestamp}] {transcription.text_message}')
 
 
     def _add_action_items_summary(self, doc: Document, transcriptions: list[Transcription]) -> None:
