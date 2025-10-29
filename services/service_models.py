@@ -34,6 +34,9 @@ from sqlalchemy.orm import relationship
 # 自定义库
 from db.databases import Base
 
+class SignRequest(BaseModel):
+    meeting_id: str
+    current_users_id: List[str]
 
 class SentenceItem(BaseModel):
     sentence: str

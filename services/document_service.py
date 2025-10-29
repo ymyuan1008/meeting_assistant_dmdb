@@ -299,7 +299,7 @@ class DocumentService(object):
         }
         return role_translations.get(role, '参会者')
 
-    async def generate_minutes(self, meeting: Meeting, transcriptions: list[Transcription]) ->  dict[str, str]:
+    async def generate_minutes(self, meeting: Meeting, transcriptions: Transcription) ->  dict[str, str]:
         """Generate meeting minutes document"""
         # Generate PDF document
         #pdf_path = await self._generate_minutes_pdf(meeting, transcriptions)
@@ -578,7 +578,7 @@ class DocumentService(object):
         return role_map.get(role, role)
 
 
-    async def _generate_minutes_word(self, meeting: Meeting, transcriptions: list[Transcription]) -> str:
+    async def _generate_minutes_word(self, meeting: Meeting, transcriptions: Transcription) -> str:
         """Generate Word format meeting minutes"""
         doc = Document()
 
@@ -620,7 +620,7 @@ class DocumentService(object):
             cells[0].text = label
             cells[1].text = value
 
-    def _add_transcription_content(self, doc: Document, transcriptions: list[Transcription]) -> None:
+    def _add_transcription_content(self, doc: Document, transcriptions: Transcription) -> None:
         """添加转录内容"""
         if not transcriptions:
             return
@@ -628,12 +628,13 @@ class DocumentService(object):
         doc.add_heading('会议内容', level=1)
 
         current_speaker = None
-        for transcription in transcriptions:
-            if transcription.speaker_name != current_speaker:
-                current_speaker = transcription.speaker_id
-                doc.add_heading(f'{current_speaker}:', level=3)
+        if transcriptions.speaker_name != current_speaker:
+            current_speaker = transcriptions.speaker_id
+            doc.add_heading(f'{current_speaker}:', level=3)
+        #for transcription in transcriptions:
 
-            self._add_transcription_paragraph(doc, transcription)
+
+        self._add_transcription_paragraph(doc, transcriptions)
 
     def _add_transcription_paragraph(self, doc: Document, transcription: Transcription) -> None:
         """添加单个转录段落"""
@@ -654,9 +655,10 @@ class DocumentService(object):
             paragraph = doc.add_paragraph(f'[{timestamp}] {transcription.text_message}')
 
 
-    def _add_action_items_summary(self, doc: Document, transcriptions: list[Transcription]) -> None:
+    def _add_action_items_summary(self, doc: Document, transcriptions: Transcription) -> None:
         """添加行动项汇总"""
-        action_items = [t for t in transcriptions if t.is_action_item]
+        #action_items = [t for t in transcriptions if t.is_action_item]
+        action_items = transcriptions.is_action_item
         if not action_items:
             return
 
@@ -666,7 +668,8 @@ class DocumentService(object):
 
     def _add_decisions_summary(self, doc: Document, transcriptions: list[Transcription]) -> None:
         """添加决议汇总"""
-        decisions = [t for t in transcriptions if t.is_decision]
+        #decisions = [t for t in transcriptions if t.is_decision]
+        decisions = transcriptions.is_decision
         if not decisions:
             return
 
