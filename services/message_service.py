@@ -6,7 +6,7 @@ from loguru import logger
 from datetime import datetime
 from pytz import timezone
 
-from services.service_models import Message, MessageRecipient
+from  models import Message, MessageRecipient
 
 shanghai_tz = timezone("Asia/Shanghai")
 
@@ -85,14 +85,15 @@ class MessageService(object):
         if only_unread:
             conditions.append(MessageRecipient.is_read == False)
 
-        # 统计总数（去重消息ID）
-        count_q = (
-            select(func.count(func.distinct(Message.id)))
-            .join(MessageRecipient, MessageRecipient.message_id == Message.id)
+        # 统计总数：使用子查询对 message_id 去重后计数，避免某些驱动/数据库下 distinct 计数问题
+        ids_distinct_subq = (
+            select(MessageRecipient.message_id)
             .where(*conditions)
-        )
+            .group_by(MessageRecipient.message_id)
+        ).subquery()
+        count_q = select(func.count()).select_from(ids_distinct_subq)
         count_result = await db.execute(count_q)
-        total = count_result.scalar() or 0
+        total = int(count_result.scalar() or 0)
 
         # 计算偏移
         offset = max(0, (page - 1) * page_size)

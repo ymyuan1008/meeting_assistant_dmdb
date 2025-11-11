@@ -1,6 +1,7 @@
 # 标准库
-from services.service_models import User
+
 from typing import Any, Optional, Callable, List, Dict
+
 
 # 第三方库
 from fastapi import Depends, Header, HTTPException, status
@@ -11,7 +12,7 @@ from loguru import logger
 from db.databases import get_db
 from .auth_service import AuthService
 from .user_service import UserService
-from .service_models import User, UserRole, UserStatus
+from  models import User, UserRole, UserStatus
 
 # 单例服务实例（与项目风格保持一致）
 auth_service = AuthService()

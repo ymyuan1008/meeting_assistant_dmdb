@@ -1,0 +1,6 @@
+projectKey=meeting-system-develop
+serverUrl=http://159.75.114.74:9000
+serverVersion=10.2.1.78527
+dashboardUrl=http://159.75.114.74:9000/dashboard?id=meeting-system-develop
+ceTaskId=AZoLTGhD6I5uKtQBevh_
+ceTaskUrl=http://159.75.114.74:9000/api/ce/task?id=AZoLTGhD6I5uKtQBevh_

@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import os
 import sys
 import pytest
@@ -16,18 +16,28 @@ from router import user_manage as user_router
 from services.service_models import Base, User, UserRole, UserStatus
 import bcrypt
 
+# 允许在某些测试场景下跳过数据库初始化（例如纯路由功能测试）
+SKIP_DB_SETUP = os.getenv("SKIP_DB_SETUP_FOR_TESTS", "0") == "1"
+
 # 使用本地SQLite文件，便于并发与跨线程访问
 TEST_DB_URL = "sqlite:///./test_api.db"
 
-# 创建测试数据库引擎与会话工厂
-engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# 默认占位，避免在跳过模式下引用未定义变量
+engine = None
+TestingSessionLocal = None
 
-# 创建所有模型表
-Base.metadata.create_all(bind=engine)
+if not SKIP_DB_SETUP:
+    # 创建测试数据库引擎与会话工厂
+    engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    # 创建所有模型表
+    Base.metadata.create_all(bind=engine)
 
 # 依赖覆盖：将生产环境的 MySQL 会话替换为测试SQLite会话
 async def _override_get_db():
+    if TestingSessionLocal is None:
+        # 在跳过数据库初始化的测试场景中，避免使用该fixture
+        pytest.skip("Database setup skipped for this test run")
     db = TestingSessionLocal()
     try:
         yield db
@@ -56,6 +66,8 @@ async def client(app: FastAPI):
 
 @pytest.fixture(scope="function")
 def db_session():
+    if TestingSessionLocal is None:
+        pytest.skip("Database setup skipped for this test run")
     db = TestingSessionLocal()
     try:
         yield db

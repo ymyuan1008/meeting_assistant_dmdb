@@ -1,12 +1,9 @@
 # 标准库
-from services.service_models import User
-
-
 import os
+import re
 import uuid
 from datetime import datetime, timedelta,timezone
 from typing import Optional, Tuple, Dict, Any
-import re
 
 # 第三方库
 from jose import jwt, JWTError
@@ -14,7 +11,7 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 # 自定义模块
-from .service_models import User, UserStatus
+from  models import User, UserStatus
 from .user_service import UserService
 
 
@@ -31,7 +28,7 @@ class AuthService(object):
     # 默认配置常量
     DEFAULT_JWT_SECRET: str = "apkMJPa1m693UbMu1PvA1xPi7oExmXoDYqOaCHafMEM"
     DEFAULT_JWT_ALGORITHM: str = "HS256"
-    DEFAULT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    DEFAULT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 240  # 4小时
     DEFAULT_REFRESH_TOKEN_EXPIRE_MINUTES: int = 43200  # 30天
     DEFAULT_JWT_ISSUER: str = "meeting-assistant"
     DEFAULT_JWT_AUDIENCE: str = "meeting-assistant-clients"

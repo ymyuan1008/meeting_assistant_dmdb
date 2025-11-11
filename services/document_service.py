@@ -1,5 +1,6 @@
 #Python标准库
 import os
+import logging
 from typing import List, Dict, Optional
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
@@ -25,16 +26,29 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
 # 自定义库
-from services.service_models import Meeting, Transcription
+from  models import Meeting, Transcription
 from db.minio_upload import MinioUploader
 
-uploader = MinioUploader(
-    os.getenv('MINIO_ENDPOINT'),
-    access_key=os.getenv('MINIO_ACCESS_KEY'),
-    secret_key=os.getenv('MINIO_SECRET_KEY'),
-    secure=os.getenv('MINIO_SECURE', 'False').lower() == 'true'
-)
+logger = logging.getLogger(__name__)
 
+def _init_minio_uploader() -> Optional[MinioUploader]:
+    """Safely initialize MinIO uploader. Returns None if config missing/invalid."""
+    endpoint = os.getenv('MINIO_ENDPOINT')
+    access_key = os.getenv('MINIO_ACCESS_KEY')
+    secret_key = os.getenv('MINIO_SECRET_KEY')
+    secure = str(os.getenv('MINIO_SECURE', 'False')).lower() == 'true'
+    cert_check = False
+
+    if not endpoint or not access_key or not secret_key:
+        logger.warning("MinIO 未配置（缺少 MINIO_ENDPOINT/MINIO_ACCESS_KEY/MINIO_SECRET_KEY），将使用本地保存。")
+        return None
+    try:
+        return MinioUploader(endpoint, access_key=access_key, secret_key=secret_key, secure=secure)
+    except Exception as e:
+        logger.error(f"MinIO 初始化失败，将使用本地保存。错误: {e}")
+        return None
+
+uploader: Optional[MinioUploader] = _init_minio_uploader()
 console_address = os.getenv('MINIO_CONSOLE_ADDRESS')
 bucket_name = "meeting-minutes"
 
@@ -83,8 +97,9 @@ class DocumentService(object):
         print("开始打印通知书")
         word_path = await self._generate_notification_word(meeting)
         # Generate PDF document
-        pdf_path = await self._generate_notification_pdf(meeting)
-        return {"word": word_path, "pdf": pdf_path}
+        #pdf_path = await self._generate_notification_pdf(meeting)
+        return {"word": word_path}
+        #return {"word": word_path, "pdf": pdf_path}
 
     async def _generate_notification_word(self, meeting: Meeting) -> str:
         """Generate Word format meeting notification"""
@@ -115,7 +130,7 @@ class DocumentService(object):
         cells[1].text = meeting.description or '无'
         cells = details_table.rows[5].cells
         cells[0].text = '会议议程'
-        cells[1].text = meeting.agenda or '待补充'
+        cells[1].text ='待补充'
         # Add participants section
         if meeting.participants:
             doc.add_heading('参会人员', level=1)
@@ -138,9 +153,30 @@ class DocumentService(object):
         footer.add_run(f'\n\n生成时间：{datetime.now().strftime("%Y年%m月%d日 %H:%M")}')
         # Save document
         filename = f"meeting_notification_{meeting.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+        object_name = f"meeting_notification_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
         filepath = os.path.join(self.output_dir, filename)
         doc.save(filepath)
-        return filepath
+        # 如果未配置 MinIO 或 console 地址缺失，则直接返回本地文件路径
+        if uploader is None or not console_address:
+            if uploader is None:
+                logger.info("MinIO 未启用或初始化失败，返回本地文件路径。")
+            else:
+                logger.warning("MINIO_CONSOLE_ADDRESS 未设置，返回本地文件路径。")
+            return filepath
+
+        # 上传到 MinIO，若失败则回退到本地路径
+        try:
+            minio_path, presigned_url = uploader.upload_file(console_address, bucket_name, filepath, object_name)
+            if minio_path and presigned_url:
+                print(f"文件已上传，MinIO 路径: {minio_path}")
+                print(f"预签名 URL: {presigned_url}")
+                return presigned_url
+            else:
+                logger.warning("MinIO 上传失败，返回本地文件路径。")
+                return filepath
+        except Exception as e:
+            logger.error(f"MinIO 上传异常，返回本地文件路径。错误: {e}")
+            return filepath
 
 
     async def _generate_notification_pdf(self, meeting: Meeting) -> str:
@@ -657,6 +693,8 @@ class DocumentService(object):
 
     def _add_action_items_summary(self, doc: Document, transcriptions: Transcription) -> None:
         """添加行动项汇总"""
+        if not transcriptions:
+            return
         #action_items = [t for t in transcriptions if t.is_action_item]
         action_items = transcriptions.is_action_item
         if not action_items:
@@ -668,6 +706,8 @@ class DocumentService(object):
 
     def _add_decisions_summary(self, doc: Document, transcriptions: list[Transcription]) -> None:
         """添加决议汇总"""
+        if not transcriptions:
+            return
         #decisions = [t for t in transcriptions if t.is_decision]
         decisions = transcriptions.is_decision
         if not decisions:
@@ -689,14 +729,27 @@ class DocumentService(object):
         object_name = f"meeting_minutes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
         filepath = os.path.join(self.output_dir, filename)
         doc.save(filepath)
-        csv_file_path = filepath
-        object_name = object_name
+        # 如果未配置 MinIO 或 console 地址缺失，则直接返回本地文件路径
+        if uploader is None or not console_address:
+            if uploader is None:
+                logger.info("MinIO 未启用或初始化失败，返回本地文件路径。")
+            else:
+                logger.warning("MINIO_CONSOLE_ADDRESS 未设置，返回本地文件路径。")
+            return filepath
 
-        minio_path, presigned_url = uploader.upload_file(console_address, bucket_name, csv_file_path, object_name)
-        if minio_path and presigned_url:
-            print(f"文件已上传，MinIO 路径: {minio_path}")
-            print(f"预签名 URL: {presigned_url}")
-        return presigned_url
+        # 上传到 MinIO，若失败则回退到本地路径
+        try:
+            minio_path, presigned_url = uploader.upload_file(console_address, bucket_name, filepath, object_name)
+            if minio_path and presigned_url:
+                print(f"文件已上传，MinIO 路径: {minio_path}")
+                print(f"预签名 URL: {presigned_url}")
+                return presigned_url
+            else:
+                logger.warning("MinIO 上传失败，返回本地文件路径。")
+                return filepath
+        except Exception as e:
+            logger.error(f"MinIO 上传异常，返回本地文件路径。错误: {e}")
+            return filepath
 
 
 

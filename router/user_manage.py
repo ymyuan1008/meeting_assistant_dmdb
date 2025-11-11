@@ -1,5 +1,5 @@
 # 标准库
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Generator
 
 # 第三方库
 from fastapi import APIRouter, Depends, HTTPException, status, Header, Query
@@ -10,12 +10,13 @@ from loguru import logger
 from utils.encryption import rsa_encryption
 
 # 自定义模块
-from db.databases import DatabaseConfig, DatabaseSessionManager
+from db.databases import DMDatabaseManager
 from services.user_service import UserService
 from services.auth_service import AuthService
 from services.auth_dependencies import require_auth, require_admin
-from services.service_models import User, UserStatus, UserRole
-from schemas import UserLogin, UserCreate, UserUpdate, UserResponse,UserRegister, UserBasicResponse
+
+from models import User, UserStatus, UserRole
+from schema import UserLogin, UserCreate, UserUpdate, UserResponse,UserRegister, UserBasicResponse
 
 router = APIRouter(prefix="/api", tags=["Users & Auth"])
 
@@ -24,18 +25,21 @@ user_service = UserService()
 auth_service = AuthService()
 
 # 对外暴露的依赖注入函数
-db_config = DatabaseConfig()
-db_manager = DatabaseSessionManager(db_config)
-get_db = db_manager.get_sync_session  # 同步会话依赖
-get_async_db = db_manager.get_async_session  # 异步会话依赖
+dm_db_manager = DMDatabaseManager()
 
 # 对外暴露的依赖注入函数（与FastAPI路由配合使用）
-get_db = db_manager.get_sync_session  # 同步会话依赖
-get_async_db = db_manager.get_async_session  # 异步会话依赖
+def get_db() -> Generator[Session, None, None]:
+    """原contextmanager风格接口：兼容旧代码"""
+    with dm_db_manager.get_db_context() as db:
+        yield db
+def get_async_db() -> Generator[Session, None, None]:
+    """原contextmanager风格接口：兼容旧代码"""
+    with dm_db_manager.get_db_context() as db:
+        yield db
 
 # ----------------------------- 辅助方法 -----------------------------
 
-def _resp(data=None, message="success", code=0):
+def _resp(data=None, message="success", code=200):
     return {"code": code, "message": message, "data": data}
 
 
@@ -537,7 +541,7 @@ async def reset_password(user_id: str, db: Session = Depends(get_db), current_us
         _raise(status.HTTP_500_INTERNAL_SERVER_ERROR, "服务器内部错误", "server_error")
 
 # 新增：用户自助修改密码接口（需旧密码验证）
-from schemas import PasswordChange
+from schema import PasswordChange
 
 @router.post("/users/{user_id}/change_password", summary="用户自助修改密码", response_model=dict)
 async def change_password(user_id: str, payload: PasswordChange, db: Session = Depends(get_db), current_user: User = Depends(require_auth)):

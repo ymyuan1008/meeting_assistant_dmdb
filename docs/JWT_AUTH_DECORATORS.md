@@ -138,7 +138,7 @@ async def get_profile(current_user: User = Depends(require_auth)):
 
 系统支持两种类型的JWT令牌：
 
-1. **access_token**: 用于API访问认证，有效期较短（默认30分钟）
+1. **access_token**: 用于API访问认证，有效期较短（默认240分钟/4小时）
 2. **refresh_token**: 用于刷新access_token，有效期较长（默认30天）
 
 ### 5.2 令牌刷新
@@ -185,7 +185,7 @@ JWT相关的环境变量配置：
 # JWT Configuration
 JWT_SECRET=apkMJPa1m693UbMu1PvA1xPi7oExmXoDYqOaCHafMEM
 JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
+ACCESS_TOKEN_EXPIRE_MINUTES=240
 REFRESH_TOKEN_EXPIRE_MINUTES=43200
 JWT_ISSUER=meeting-assistant
 JWT_AUDIENCE=meeting-assistant-clients

@@ -28,7 +28,8 @@ from sqlalchemy import (
      BigInteger,
     Text,
     Integer,
-    Boolean
+    Boolean,
+    text
 )
 from sqlalchemy.orm import relationship
 # 自定义库
@@ -172,7 +173,7 @@ class TranscriptionText(Base):
     other_meeting_id = Column(String(100), nullable=False)
     speaker_name = Column(String(100), nullable=True)  # 如果没有说话人信息可以设为可选
     text_message = Column(Text, nullable=False)  # 使用Text类型存储长文本
-    created_time = Column(DateTime, default=datetime.utcnow)
+    created_time = Column(DateTime)
 
 
 class TranscriptionTextResponse(TranscriptionText):
@@ -242,7 +243,7 @@ class PersonSign(Base):
     meeting_id = Column(String(50), ForeignKey("meetings.id"), nullable=False)
     is_signed = Column(Boolean, default=False)
     is_on_leave = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz), comment="创建时间")
+    created_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
 
 class Meeting(Base):
     __tablename__ = "meetings"
@@ -255,8 +256,8 @@ class Meeting(Base):
     agenda = Column(Text)
     # scheduled, in_progress, completed, cancelled
     status = Column(String(50), default="scheduled")
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz), onupdate=datetime.utcnow)
+    created_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
+    updated_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
     # 关联字段：创建者/更新者
     created_by = Column(BigInteger, ForeignKey("users.id"), nullable=True, comment="创建者用户ID")
     updated_by = Column(BigInteger, ForeignKey("users.id"), nullable=True, comment="更新者用户ID")
@@ -280,7 +281,7 @@ class Participant(Base):
     user_role = Column(String(50), default="participant")
     is_required = Column(Boolean, default=True)
     attendance_status = Column(String(50), default="pending")
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz))
+    created_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
 
     # 与 User 模型中的 participations 对应
     user = relationship(

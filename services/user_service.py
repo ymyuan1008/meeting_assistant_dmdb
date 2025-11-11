@@ -12,8 +12,8 @@ from loguru import logger
 import bcrypt
 
 # 自定义模块
-from services.service_models import User, UserRole, UserStatus, Meeting
-from schemas import UserCreate, UserUpdate
+from  models import User, UserRole, UserStatus, Meeting
+from schema import UserCreate, UserUpdate
 
 
 class UserService(object):
@@ -236,19 +236,8 @@ class UserService(object):
         """
         import re
         try:
-            # 检查是否为邮箱格式
-            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-            # 检查是否为手机号格式
-            phone_pattern = r'^1(?:3\d|4[01456879]|5[0-35-9]|6[2567]|7[0-8]|8\d|9[0-35-9])\d{8}$'
-            if re.match(email_pattern, identifier):
-                # 邮箱登录
-                return self.get_user_by_email(db, identifier)
-            elif re.match(phone_pattern, identifier):
-                # 手机号登录
-                return self.get_user_by_phone(db, identifier)
-            else:
-                # 用户名登录
-                return self.get_user_by_username(db, identifier)
+            # 用户名登录（sync 方法直接返回）
+            return self.get_user_by_username(db, identifier)
 
         except Exception as e:
             logger.error(f"根据登录标识符查询用户失败(identifier={identifier}): {e}")
@@ -422,12 +411,7 @@ class UserService(object):
                              default_password: str = "Test@1234") -> bool:
         """重置用户密码为默认值（bcrypt加密），返回是否成功"""
         try:
-            # 将字符串ID转换为整数以匹配 BigInteger 主键类型
-            try:
-                user_id_int = int(user_id)
-            except (TypeError, ValueError):
-                user_id_int = None
-            user = db.query(User).filter(User.id == (user_id_int if user_id_int is not None else user_id)).first()
+            user = db.query(User).filter(User.id == user_id).first()
             if not user:
                 return False
             # 生成新的密码哈希

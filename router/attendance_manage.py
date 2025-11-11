@@ -19,25 +19,35 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydub import AudioSegment
 from fastapi import APIRouter,HTTPException, Depends
+from pydantic import BaseModel
+from typing import List, Any
 
 #自定义库
 from services.sign_in_service import SignInService
 from services.document_service import DocumentService
 from services.speech_service import SpeechService
 from services.email_service import EmailService
-from schemas import MeetingCreate, MeetingResponse, TranscriptionCreate, PersonSignResponse,ParticipantCreate
+
+
+from schema import MeetingCreate, MeetingResponse, TranscriptionCreate, PersonSignResponse,ParticipantCreate
 from db.conn_manager import ConnectionManager
-from db.databases import DatabaseConfig, DatabaseSessionManager
+from db.databases import DMDatabaseManager
 
 from services.auth_dependencies import require_auth, require_admin
 
-from services.service_models import User, UserStatus, UserRole, SignRequest
+from models import User, UserStatus, UserRole
+from schema import SignRequest
 
 # 对外暴露的依赖注入函数
-db_config = DatabaseConfig()
-db_manager = DatabaseSessionManager(db_config)
-get_db = db_manager.get_sync_session  # 同步会话依赖
-get_async_db = db_manager.get_async_session  #
+dm_db_manager = DMDatabaseManager()
+def get_db() -> Generator[Session, None, None]:
+    """原contextmanager风格接口：兼容旧代码"""
+    with dm_db_manager.get_db_context() as db:
+        yield db
+def get_async_db() -> Generator[Session, None, None]:
+    """原contextmanager风格接口：兼容旧代码"""
+    with dm_db_manager.get_db_context() as db:
+        yield db
 
 router = APIRouter()
 # 获取东八区当前时间
@@ -56,14 +66,29 @@ MEETING_NOT_FOUND_DETAIL = "Meeting not found"
 
 router = APIRouter(prefix="/api/attendance", tags=["SignIn"])
 
+
+def _resp(data=None, message="success", code=200):
+    return {"code": code, "message": message, "data": data}
+
+
+def _raise(status_code: int, message: str, code: str):
+    raise HTTPException(status_code=status_code, detail={"code": code, "message": message})
+
+class ApiResponse(BaseModel):
+    data: List[Any]  # 明确要求 data 是列表
+    message: str
+    code: int
+
 # 获取当前所有人员的签到状态
-@router.get("/people", summary="获取当前所有人员的签到状态", response_model=List[PersonSignResponse])
-async def get_people_sign_status(meeting_id: str,db: Session = Depends(get_db)) -> List[PersonSignResponse]:
+@router.get("/people", summary="获取当前所有人员的签到状态")
+async def get_people_sign_status(meeting_id: str,db: Session = Depends(get_db)):
     """获取所有人员的签到状态"""
     try:
         # 调用服务层方法，传入数据库会话
         people = await attendance_service.get_people_sign_status(db, meeting_id)
-        return people
+
+        return {"data":people,"code":200, "message":"request success"}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取人员签到状态失败: {str(e)}")
 
@@ -135,13 +160,15 @@ async def leave(
     """
     人员批量请假接口（绑定会议维度）
     """
-    if not current_user_ids:
+    current_users_id = request.current_users_id
+    meeting_id = request.meeting_id
+    if not current_users_id:
         raise HTTPException(status_code=400, detail="用户ID列表不能为空")
 
     results = []
     errors = []
 
-    for user_id in current_user_ids:
+    for user_id in current_users_id:
         try:
             # 查询用户
             user = db.query(User).filter(User.id == user_id).first()
@@ -190,7 +217,7 @@ async def leave(
     # 返回批量操作结果
     return {
         "meeting_id": meeting_id,
-        "total_count": len(current_user_ids),
+        "total_count": len(current_users_id),
         "success_count": len([r for r in results if r["status"] == "success"]),
         "failed_count": len([r for r in results if r["status"] == "failed"]),
         "error_count": len([r for r in results if r["status"] == "error"]),

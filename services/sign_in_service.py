@@ -10,11 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
 
 # 自定义类
-from .service_models import Meeting, Participant, Transcription, PersonSign, User
-from schemas import MeetingCreate,TranscriptionCreate, PersonSignCreate
+from  models import Meeting, Participant, Transcription, PersonSign, User
+from schema import MeetingCreate,TranscriptionCreate, PersonSignCreate
 
 class SignInService(object):
-    async def get_people_sign_status(self, db: Session, meeting_id: str) -> List[PersonSign]:
+    async def get_people_sign_status(self, db: Session, meeting_id: str)-> List[PersonSign]:
         """查询所有人员的签到状态（从数据库）"""
         # 可添加排序、过滤等逻辑（如按姓名排序）
         # 1. 验证会议存在性（会议不存在直接抛404，而非返回None）
@@ -24,7 +24,9 @@ class SignInService(object):
                 status_code=404,
                 detail=f"会议 ID {meeting_id} 不存在"
             )
-        return db.query(PersonSign).filter(PersonSign.meeting_id==meeting_id).order_by(PersonSign.name).all()
+
+        sign_result = db.query(PersonSign).filter(PersonSign.meeting_id==meeting_id).order_by(PersonSign.name).all()
+        return sign_result
 
     async def sign_person(self, db: Session, name: str, meeting_id: str, user_id: str) -> Dict[str, str]:
         """

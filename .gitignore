@@ -205,3 +205,8 @@ __marimo__/
 .Cursor/
 .cursor/
 keys/*.pem
+web/
+localhost.html
+static/
+nginx*
+uploads/

@@ -89,7 +89,7 @@
 # JWT Configuration
 JWT_SECRET=123456
 JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
+ACCESS_TOKEN_EXPIRE_MINUTES=240
 REFRESH_TOKEN_EXPIRE_MINUTES=43200
 JWT_ISSUER=meeting-assistant
 JWT_AUDIENCE=meeting-assistant-clients
@@ -185,7 +185,7 @@ EMAIL_PASSWORD=your_password
 说明：除 `GET /api/public/users` 外，以上接口均需携带认证头 `Authorization: Bearer <access_token>`。
 
 认证与令牌说明：
-- `access_token` 有效期由 `ACCESS_TOKEN_EXPIRE_MINUTES` 控制（默认 30 分钟）
+- `access_token` 有效期由 `ACCESS_TOKEN_EXPIRE_MINUTES` 控制（默认 240 分钟/4 小时）
 - `refresh_token` 有效期由 `REFRESH_TOKEN_EXPIRE_MINUTES` 控制（默认 43200 分钟）
 - 刷新令牌采用令牌轮换机制，旧 `refresh_token` 在刷新后立即失效进入黑名单
 - 支持用户名、邮箱或手机号三种登录方式

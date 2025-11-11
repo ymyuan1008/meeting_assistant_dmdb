@@ -1,74 +1,563 @@
 # 标准库
 import uuid
+import os
+
 from datetime import datetime, timezone
 from typing import List, Optional, Dict
 from loguru import logger
 import pytz
+from pathlib import Path
+
 
 # 第三方库
 from sqlalchemy.orm import Session
 from sqlalchemy.future import select
+from sqlalchemy import func, select, case , distinct, literal,cast,String
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
+from fastapi import UploadFile
+
 
 # 自定义类
-from services.service_models import Meeting, Participant, Transcription, PersonSign, User, TranscriptionText
-from schemas import MeetingCreate, TranscriptionCreate, AttachmentCreate, Attachment
+from  models import Meeting, Participant, Agendas, Attachment
+from  models import Transcription,PersonSign, User, TranscriptionText
+from services.excel_service import ExcelService
+
+from schema import MeetingCreate, TranscriptionCreate,MeetingUpdate, AttachmentCreate, AttachmentUpdate
+from schema import  DailyWorkResponse, MeetingAgendaResponse, MeetingResponse,MeetingLedgerResponse
 
 
 shanghai_tz = pytz.timezone('Asia/Shanghai')
-class MeetingService(object):
-    async def create_meeting(self, db: Session, meeting_data: MeetingCreate, user_id: str) -> Meeting:
-        """Create a new meeting with participants"""
-        # Create meeting
-        meeting = Meeting(
-            id=str(uuid.uuid4()),
-            title=meeting_data.title,
-            description=meeting_data.description,
-            date_time=meeting_data.date_time,
-            location=meeting_data.location,
-            duration_minutes=meeting_data.duration_minutes,
-            agenda=meeting_data.agenda,
-            status="scheduled"
-        )
-        db.add(meeting)
-        # Get the meeting ID
-        db.flush()
-        # Create participants
-        for participant_data in meeting_data.participants:
-            # 根据姓名从users表查询用户
-            user = db.query(User).filter(User.name == participant_data.name).first()
-            print(user.id)
-            if not user:
-                # 处理用户不存在的情况（根据业务需求选择抛错或跳过）
-                raise ValueError(f"用户 '{participant_data.name}' 不存在，请检查姓名是否正确")
-            participant = Participant(
-                id=str(uuid.uuid4()),
-                meeting_id=meeting.id,
-                user_code=str(user.id),
-                name=participant_data.name,
-                email=participant_data.email,
-                user_role=participant_data.user_role,
-                is_required=participant_data.is_required,
-                created_at = datetime.now(shanghai_tz)
-            )
-            db.add(participant)
 
-        # 处理附件
-        for attachment_data in meeting_data.attachments:
-            attachment = Attachment(
+# 配置
+UPLOAD_DIR = "uploads"
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+ALLOWED_EXTENSIONS = {'.pdf','.doc', '.docx', '.txt'}
+
+# 创建上传目录
+Path(UPLOAD_DIR).mkdir(exist_ok=True)
+
+def validate_file_extension(filename: str):
+    """验证文件扩展名"""
+    ext = Path(filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的文件类型: {ext}。允许的类型: {', '.join(ALLOWED_EXTENSIONS)}"
+        )
+
+def generate_safe_filename(original_filename: str) -> str:
+    """生成安全的文件名"""
+    ext = Path(original_filename).suffix
+    unique_id = uuid.uuid4().hex
+    return f"{unique_id}{ext}"
+
+def create_work_log(sample_data: List[Dict]):
+    # 1. 初始化生成器
+    excel_gen = ExcelService(output_dir="./uploads")
+
+    # 2. 准备数据（支持列表或字典格式）
+    sample_data = sample_data
+
+    # 3. 定义表头（决定列顺序）
+    headers = ["会议编号", "日期", "工作单位","工作事项",  "工作内容",  "工作成效", "工时", "备注"]
+
+    # 4. 定义合并单元格（可选）
+    merge_cells = [
+        ("A2:C2", "姓名： "),
+        ("D2:H2", "所任职企业及职务： "),
+    ]
+
+    title_style = {
+        "font": {"bold": True},  # 核心：字体加粗
+        # 可选：补充其他样式（如字体大小、颜色等）
+        # "font_size": 14,
+        # "font_color": "000000"
+    }
+
+    # 5. 生成Excel
+    excel_gen.create_excel(
+        data=sample_data,
+        headers=headers,
+        sheet_name="履职工作日志",
+        title="履职工作日志（管理员的权限）",
+        title_merge_range="A1:H1",  # 标题合并A1到H1
+        merge_cells=merge_cells,
+        wrap_text_columns=[3],  # 第3列（工作内容）自动换行
+        date_format_columns=[2],  # 第1列（日期）自动格式化
+        filename_prefix="履职工作日志"
+    )
+
+def create_ledger_info(sample_data: List[Dict]):
+    # 1. 初始化生成器
+    excel_gen = ExcelService(output_dir="./uploads")
+
+    # 2. 准备数据（支持列表或字典格式）
+    sample_data = sample_data
+
+    # 3. 定义表头（决定列顺序）
+    headers = ["议题编号（内部使用）", "议题名称","议题提出部门","适用治理主体权责清单文件名及文号","适用治理主体权责清单事项编号（含三重一大编号）及具体事项",
+               "议题决策程序(根据权责清单确定)","三重一大分类(根据权责清单中的三重一大编号判断)","三重一大系统事项编码*（按三重一大系统《企业'三重一大'事项清单采集指标》事项清单填写）","议题类型1（按权责清单中的'业务领域'填写）",
+               "议题类型2","议题类型3","投资类议题金额（万元）","投资类议题是否开展专项调研","投资类议题是否开展重大投资项目评价及反馈","是否董事会授权","议题类型（原一览表要求）",
+               "是否涉及合规审核","是否涉及职工权益","是否属于依托治理型行权管控事项","是否党委前置研究讨论","是否召开专门委员会","是否报国资委*","会议时间*","会议名称*","会议形式*","主持人*","参会人*","领导参会详情",
+               "领导请假情况","应到人数","实到人数","投票同意","投票反对","投票弃权","投票结果","是否涉及回避原则","是否满足出席人数要求（原一览表要求）","纪委书记是否列席","总法律顾问/合规官是否列席","是否召开沟通会","列席部门/单位、具体人员"]
+
+
+    #"议题名称", "议题提出部门", "三重一大分类", "议题类型1", "议题类型2", "议题类型3", "是否董事会授权", "是否上报国资委", "会议时间", "会议名称", "会议形式", "主持人", "参会人", "应到人数", "实到人数"
+    # 4. 定义合并单元格（可选）
+    merge_cells = [
+        ("A2:AP2", "统计时间：2025年11月6日 "),
+        ("A3:D3", "基本信息 "),
+        ("E3:W3", "行权信息 "),
+        ("X3:AP3", "会议信息 ")
+    ]
+
+    title_style = {
+        "font": {"bold": True},  # 核心：字体加粗
+        # 可选：补充其他样式（如字体大小、颜色等）
+        "font_size": 20,
+        # "font_color": "000000"
+    }
+
+
+    excel_gen.create_excel(
+        data=sample_data,
+        headers=headers,
+        sheet_name="子表3-董事会会议",
+        title="南网数研院2025年董事会会议议题清单",
+        title_merge_range="A1:AP1",  # 标题合并A1到H1
+        merge_cells=merge_cells,
+        wrap_text_columns=[4],  # 第4列（工作内容）自动换行
+        filename_prefix="台账登记管理"
+    )
+
+
+class MeetingService(object):
+    async def create_meeting(self, db: Session, meeting_data: MeetingCreate, user_id: str) -> MeetingAgendaResponse:
+        """Create a new meeting with participants and attachments"""
+        try:
+            # Create meeting
+            meeting = Meeting(
                 id=str(uuid.uuid4()),
-                meeting_id=meeting.id,
-                file_name=attachment_data.file_name,
-                file_path=attachment_data.file_path,
-                file_size=attachment_data.file_size,
-                content_type=attachment_data.content_type,
-                uploaded_at=datetime.now(pytz.timezone('Asia/Shanghai'))
+                title=meeting_data.title,
+                description=meeting_data.description,
+                date_time=meeting_data.date_time,
+                location=meeting_data.location,
+                duration_minutes=meeting_data.duration_minutes,
+                status="scheduled",
+                created_by=user_id,
+                created_at=datetime.now(shanghai_tz)
             )
-            db.add(attachment)
-        db.commit()
-        db.refresh(meeting)
-        return meeting
+            db.add(meeting)
+            db.flush()  # 获取meeting.id
+
+            # 创建议程
+            for agenda_data in meeting_data.agendas:
+                db_agenda = Agendas(
+                    agenda_name=agenda_data.agenda_name,
+                    meeting_form=agenda_data.meeting_form,
+                    meeting_id=meeting.id,
+                    is_board_meeting=agenda_data.is_board_meeting,
+                    three_important=agenda_data.three_important,
+                    topic_type1=agenda_data.topic_type1,
+                    topic_type2=agenda_data.topic_type2,
+                    topic_type3=agenda_data.topic_type3,
+                    is_escalation=agenda_data.is_escalation,
+                    created_by = agenda_data.created_by  # 添加创建人字段
+                )
+                db.add(db_agenda)
+
+            # Create participants
+            for participant_data in meeting_data.participants:
+                user = db.query(User).filter(User.name == participant_data.name).first()
+                if not user:
+                    raise ValueError(f"用户 '{participant_data.name}' 不存在，请检查姓名是否正确")
+                participant = Participant(
+                    id=str(uuid.uuid4()),
+                    meeting_id=meeting.id,
+                    user_code=str(user.id),
+                    name=participant_data.name,
+                    email=participant_data.email,
+                    user_role=participant_data.user_role,
+                    is_required=participant_data.is_required,
+                    created_at=datetime.now(shanghai_tz)
+                )
+                db.add(participant)
+
+            # 处理附件（从上传的文件创建）
+            for attachment_data in meeting_data.attachments:
+                attachment = Attachment(
+                    id=str(uuid.uuid4()),
+                    meeting_id=meeting.id,
+                    file_name=attachment_data['file_name'],  # 改为字典访问方式
+                    file_path=attachment_data['file_path'],
+                    file_size=attachment_data['file_size'],
+                    download_url=attachment_data['download_url'],
+                    content_type=attachment_data['content_type'],
+                    uploaded_by=attachment_data['uploaded_by'],
+                    uploaded_at=datetime.now(shanghai_tz)
+                )
+                db.add(attachment)
+
+            db.commit()
+            db.refresh(meeting)
+            return meeting
+
+        except Exception as e:
+            db.rollback()
+            logger.error(f"创建会议服务层错误: {str(e)}")
+            raise
+
+    async def get_daily_work(
+            self,
+            db: Session,
+            current_user_id: str,
+            participants_list: List[str] = None,
+            skip: int = 0,
+            limit: int = 100
+    ) -> List[DailyWorkResponse]:
+        """获取用户会议信息 - 修复GROUP BY问题"""
+        try:
+            # 获取用户角色
+            user_role = db.query(User.user_role).filter(
+                User.id == current_user_id).scalar() if current_user_id else None
+            logger.info(f"查询用户 {current_user_id} 的会议信息，角色: {user_role}")
+
+            # 权限控制
+            if user_role != "admin":
+                logger.info(f"用户 {current_user_id} 非admin角色，无权限查询数据")
+                return []
+            participants_list = participants_list
+
+            # 处理参与者列表为空的情况
+            if not participants_list:
+                # 为空时不过滤参与者，查询所有会议
+                query = db.query(
+                    Meeting.id,
+                    Meeting.date_time,
+                    Meeting.title,
+                    func.group_concat(func.distinct(Agendas.agenda_name)).label('agenda'),
+                    func.group_concat(func.distinct(Transcription.text_message)).label('text_message'),
+                    (Meeting.duration_minutes / 60).label('duration_minutes'),
+                    func.group_concat(func.distinct(User.name)).label('participant_names'),
+                    func.group_concat(func.distinct(User.company)).label('company_names')
+                ).join(Participant, Meeting.id == Participant.meeting_id) \
+                    .join(User, Participant.user_code == User.id) \
+                    .join(Agendas, Agendas.meeting_id == Meeting.id) \
+                    .join(Transcription, Meeting.id == Transcription.meeting_id)
+            else:
+                # 不为空时过滤参与者
+                query = db.query(
+                    Meeting.id,
+                    Meeting.date_time,
+                    Meeting.title,
+                    func.group_concat(func.distinct(Agendas.agenda_name)).label('agenda'),
+                    func.group_concat(func.distinct(Transcription.text_message)).label('text_message'),
+                    (Meeting.duration_minutes / 60).label('duration_minutes'),
+                    func.group_concat(func.distinct(User.name)).label('participant_names'),
+                    func.group_concat(func.distinct(User.company)).label('company_names')
+                ).join(Participant, Meeting.id == Participant.meeting_id) \
+                    .join(User, Participant.user_code == User.id) \
+                    .join(Agendas, Agendas.meeting_id == Meeting.id) \
+                    .join(Transcription, Meeting.id == Transcription.meeting_id) \
+                    .filter(Participant.user_code.in_(participants_list))  # 仅在列表非空时添加过滤条件
+
+            # 统一添加 GROUP BY、排序和分页（与原逻辑一致）
+            query = query.group_by(
+                Meeting.id,
+                Meeting.date_time,
+                Meeting.title,
+                Meeting.duration_minutes
+            ).order_by(Meeting.date_time.desc()) \
+                .offset(skip).limit(limit)
+
+            # 执行查询并处理结果
+            results = query.all()
+
+            meetings = []
+            for row in results:
+                meetings.append({
+                    'meeting_id': row.id,
+                    'date_time': row.date_time,
+                    'title': row.title,
+                    'agenda': row.agenda,
+                    'text_message': row.text_message,
+                    'duration_minutes': row.duration_minutes,
+                    'participant_names': row.participant_names.split(',') if row.participant_names else [],
+                    'company_names': row.company_names.split(',') if row.company_names else []
+                })
+
+            logger.info(f"成功查询到 {len(meetings)} 个会议")
+            return meetings
+
+        except Exception as e:
+            logger.error(f"Failed to retrieve meetings for user: {current_user_id}, error: {str(e)}")
+            raise
+
+    async def get_ledger_info(
+            self,
+            db: Session,
+            current_user_id: str
+    )->list[MeetingLedgerResponse]:
+        """获取用户会议信息 - 修复GROUP BY问题"""
+        try:
+            # 获取用户角色
+            user_role = db.query(User.user_role).filter(
+                User.id == current_user_id).scalar() if current_user_id else None
+            logger.info(f"查询用户 {current_user_id} 的会议信息，角色: {user_role}")
+
+            # 权限控制
+            if user_role != "admin":
+                logger.info(f"用户 {current_user_id} 非admin角色，无权限查询数据")
+                return []
+            # 关键：添加完整的 GROUP BY 子句
+
+            query = db.query(
+                # 非聚合列（与 GROUP BY 严格对应）
+                Agendas.agenda_id,
+                Agendas.agenda_name,
+                User.company,
+                Agendas.three_important,
+                Agendas.topic_type1,
+                Agendas.topic_type2,
+                Agendas.topic_type3,
+                Agendas.is_board_meeting,
+                Agendas.is_escalation,
+                Meeting.date_time,
+                Meeting.title,
+                literal("线上会议").label("meeting_type"),  # 常量1：线上会议（添加标签便于识别）
+                literal("未知").label("host_user"),  # 常量2：未知（添加标签）
+                # 聚合函数列（匹配 SQL 中的别名和逻辑）
+                func.group_concat(PersonSign.name).label('participant_names'),
+                func.count(distinct(PersonSign.user_code)).label('planned_attendance'),
+                func.sum(PersonSign.is_signed).label('actual_attendance')
+            ).select_from(Meeting).outerjoin(User, Meeting.created_by == User.id).outerjoin(PersonSign, Meeting.id == PersonSign.meeting_id).join(Agendas, Meeting.id == Agendas.meeting_id).group_by(
+                Agendas.agenda_id,
+                Agendas.agenda_name,
+                User.company,
+                Agendas.three_important,
+                Agendas.topic_type1,
+                Agendas.topic_type2,
+                Agendas.topic_type3,
+                Agendas.is_board_meeting,
+                Agendas.is_escalation,
+                Meeting.date_time,
+                Meeting.title
+            ).filter(Agendas.agenda_id.isnot(None))
+
+            # 执行查询
+            ledger_results = query.all()
+
+            ledger_info = []
+
+            for row in ledger_results:
+                # 构建标准化输出字典（严格匹配查询字段）
+                ledger_info.append({
+                    "agenda_id": row.agenda_id,
+                    "agenda_name": row.agenda_name,
+                    "company": row.company,
+                    "three_important": row.three_important,
+                    "topic_type1":   row.topic_type1,
+                    "topic_type2":   row.topic_type2,
+                    "topic_type3":    row.topic_type3,
+                    "is_board_meeting": row.is_board_meeting,
+                    "is_escalation": row.is_escalation,
+                    "meeting_time": row.date_time,
+                    "meeting_type": row.meeting_type,
+                    "meeting_title": row.title,
+                    "host_user": row.host_user,
+                    "participant_user": row.participant_names ,
+                    "planned_attendance": row.planned_attendance,
+                    "actual_attendance": row.actual_attendance
+                })
+                print("输出的meetings",ledger_info)
+
+            logger.info(f"会议台账查询成功，返回 {len(ledger_info)} 条记录")
+            return ledger_info
+
+        except Exception as e:
+            logger.error(f"会议台账查询失败：{str(e)}", exc_info=True)  # 增加堆栈信息便于调试
+            raise  # 抛出异常由上层统一处理（如返回500错误）
+
+
+    async def export_daily_work(
+            self,
+            db: Session,
+            current_user_id: str,
+            participants_list: List[str] = None,
+            meeting_ids: List[str] = None
+    ) -> dict[str, str]:
+        """获取用户会议信息 - 修复GROUP BY问题"""
+        try:
+            # 获取用户角色
+            user_role = db.query(User.user_role).filter(
+                User.id == current_user_id).scalar() if current_user_id else None
+
+            logger.info(f"查询用户 {current_user_id} 的会议信息，角色: {user_role}")
+
+            # 权限控制
+            if user_role != "admin":
+                logger.info(f"用户 {current_user_id} 非admin角色，无权限查询数据")
+                return []
+            participants_list = participants_list
+
+            if current_user_id not in participants_list:
+                participants_list.append(current_user_id)
+
+            # 构建查询 - 确保包含所有SELECT的列在GROUP BY中
+            query = db.query(
+                Meeting.id,
+                Meeting.date_time,
+                func.group_concat(func.distinct(User.company)).label('company_names'),
+                Meeting.title,
+                func.group_concat(func.distinct(Agendas.agenda_name)).label('agenda'),
+                func.group_concat(func.distinct(Transcription.text_message)).label('text_message'),
+                (Meeting.duration_minutes/60).label('duration_minutes'),
+                func.group_concat(func.distinct(User.name)).label('participant_names')
+            ).select_from(Meeting).join(Participant, Meeting.id == Participant.meeting_id) \
+                .join(User, Participant.user_code == User.id) \
+                .join(Agendas, Agendas.meeting_id == Meeting.id) \
+                .join(Transcription, Meeting.id == Transcription.meeting_id).filter(
+                Participant.user_code.in_(participants_list))
+
+            # 关键：添加完整的 GROUP BY 子句
+            query = query.group_by(
+                Meeting.id,
+                Meeting.date_time,  # SELECT 中的列
+                Meeting.title,  # SELECT 中的列
+                Meeting.duration_minutes  # SELECT 中的列
+            ).order_by(Meeting.date_time.desc())
+
+            # 执行查询
+            if meeting_ids:
+                results = query.filter(Meeting.id.in_(meeting_ids)).all()
+            else:
+                results = query.all()
+
+
+            # 生成文件名
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"履职工作日志_{timestamp}.xlsx"
+            file_path = './uploads/'+filename
+            create_work_log(results)
+            output_text = {}
+            output_text["file_name"] = filename
+            output_text["file_path"] = file_path
+            return output_text
+
+        except Exception as e:
+            logger.error(f"Failed to retrieve meetings for user: {current_user_id}, error: {str(e)}")
+            raise
+
+    async def export_ledger_info(
+            self,
+            db: Session,
+            current_user_id: str,
+            agenda_ids: list[int]=None
+    ) -> dict[str, str]:
+        """获取用户会议信息 - 修复GROUP BY问题"""
+        try:
+            # 获取用户角色
+            user_role = db.query(User.user_role).filter(
+                User.id == current_user_id).scalar() if current_user_id else None
+
+            logger.info(f"查询用户 {current_user_id} 的会议信息，角色: {user_role}")
+
+            # 权限控制
+            if user_role != "admin":
+                logger.info(f"用户 {current_user_id} 非admin角色，无权限查询数据")
+                return []
+
+            agenda_ids = agenda_ids
+
+            # 构建基础查询（公共部分）
+            query = db.query(
+                cast(Agendas.agenda_id, String).label("agenda_id"),
+                Agendas.agenda_name,
+                User.company,
+                literal("").label("适用治理主体权责清单文件名及文号"),
+                literal("").label("适用治理主体权责清单事项编号（含三重一大编号）及具体事项"),
+                literal("").label("议题决策程序(根据权责清单确定)"),
+                Agendas.three_important,
+                literal("").label("三重一大系统事项编码*（按三重一大系统《企业'三重一大'事项清单采集指标》事项清单填写）"),
+                Agendas.topic_type1,
+                Agendas.topic_type2,
+                Agendas.topic_type3,
+                literal(0).label("投资类议题金额（万元）"),
+                literal("").label("投资类议题是否开展专项调研"),
+                literal("").label("投资类议题是否开展重大投资项目评价及反馈"),
+                case(
+                    (Agendas.is_board_meeting == 1, "是"),  # 去掉外层的[]
+                    else_="否"
+                ).label("is_board_meeting"),
+                literal("").label("议题类型（原一览表要求）"),
+                literal("").label("是否涉及合规审核"),
+                literal("").label("是否涉及职工权益"),
+                literal("").label("是否属于依托治理型行权管控事项"),
+                literal("").label("是否党委前置研究讨论"),
+                literal("").label("是否召开专门委员会"),
+                case(
+                    (Agendas.is_escalation == 1, "是"),
+                    else_="否"
+                ).label("is_escalation"),
+                Meeting.date_time,
+                Meeting.title,
+                literal("线上会议").label("meeting_type"),
+                literal("未知").label("host_user"),
+                func.group_concat(PersonSign.name).label('participant_names'),
+                literal("").label("领导参会详情"),
+                literal("").label("领导请假情况"),
+                func.count(distinct(PersonSign.user_code)).label('planned_attendance'),
+                func.sum(PersonSign.is_signed).label('actual_attendance'),
+                literal("").label("投票同意"),
+                literal("").label("投票反对"),
+                literal("").label("投票弃权"),
+                literal("").label("投票结果"),
+                literal("").label("是否涉及回避原则"),
+                literal("").label("是否满足出席人数要求（原一览表要求）"),
+                literal("").label("纪委书记是否列席"),
+                literal("").label("总法律顾问/合规官是否列席"),
+                literal("").label("是否召开沟通会"),
+                literal("").label("列席部门/单位、具体人员")
+            ).select_from(Meeting) \
+                .join(Agendas, Meeting.id == Agendas.meeting_id) \
+                .join(User, Meeting.created_by == User.id) \
+                .outerjoin(PersonSign, Meeting.id == PersonSign.meeting_id) \
+                .group_by(
+                Agendas.agenda_id,
+                Agendas.agenda_name,
+                Agendas.three_important,
+                Agendas.topic_type1,
+                Agendas.topic_type2,
+                Agendas.topic_type3,
+                Agendas.is_board_meeting,
+                Agendas.is_escalation,
+                Meeting.date_time,
+                Meeting.title,
+                User.company
+            )
+
+            # 根据 agenda_ids 是否为空，动态添加过滤条件
+            if agenda_ids:  # 非空列表时，添加 in 条件
+                query = query.filter(Agendas.agenda_id.in_(agenda_ids))
+
+            # 执行查询
+            results = query.all()
+            # 生成文件名
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"台账登记管理_{timestamp}.xlsx"
+            file_path = Path("./uploads") / filename
+
+
+            create_ledger_info(results)
+            output_text = {}
+            output_text["file_name"] = filename
+            output_text["file_path"] = file_path
+            return output_text
+
+        except Exception as e:
+            logger.error(f"Failed to retrieve meetings for user: {current_user_id}, error: {str(e)}")
+            raise
 
     async def get_meetings(self, db: Session, current_user_id: str) -> list[Meeting]:
         """Get all meetings - admin users see all, regular users see only their meetings"""
@@ -83,7 +572,18 @@ class MeetingService(object):
 
         # 如果不是管理员，添加参与者过滤条件
         if user_role != "admin":
-            query = query.join(Participant, Meeting.id == Participant.meeting_id).filter(Participant.user_code == current_user_id).distinct()
+            # 第一个查询：用户参与的会议
+            query1 = (db.query(Meeting)
+                      .join(Participant, Meeting.id == Participant.meeting_id)
+                      .filter(Participant.user_code == current_user_id_str)
+                      .distinct())
+
+            # 第二个查询：用户创建的会议
+            query2 = (db.query(Meeting)
+                      .filter(Meeting.created_by == current_user_id_str))
+
+            # 使用 UNION 合并两个查询
+            query = query1.union(query2)
 
         # 统一按时间排序
         query = query.order_by(Meeting.date_time.desc())
@@ -109,60 +609,120 @@ class MeetingService(object):
         meeting = query.filter(Meeting.id == meeting_id).first()
         return meeting
 
-    def update_meeting(self, db: Session, meeting_id: str, meeting_data: MeetingCreate, current_user_id: str) -> Optional[Meeting]:
-        """Update a meeting"""
-        from time import timezone
-        # 查询用户角色
+    async def get_meetings(self, db: Session, current_user_id: str) -> List[Meeting]:
+        """获取当前用户可访问的会议列表
+        - 管理员返回全部会议
+        - 普通用户返回自己参与的会议
+        """
         try:
-            current_user_id_str = str(current_user_id)
-        except (TypeError, ValueError):
-            current_user_id_str = None
+            try:
+                current_user_id_str = str(current_user_id)
+            except (TypeError, ValueError):
+                current_user_id_str = None
 
-        user_role = (
-            db.query(User.user_role)
-            .filter(User.id == current_user_id_str)
-            .scalar()
-            if current_user_id_str is not None
-            else None
-        )
-
-        query = db.query(Meeting)
-        print("当前角色", user_role)
-        if user_role != "admin":
-            query = query.join(Participant, Meeting.id == Participant.meeting_id).filter(
-                Participant.user_code == current_user_id_str)
-        meeting = query.filter(Meeting.id == meeting_id).first()
-
-        if not meeting:
-            return None
-        # Update meeting fields
-        meeting.title = meeting_data.title
-        meeting.description = meeting_data.description
-        meeting.date_time = meeting_data.date_time
-        meeting.location = meeting_data.location
-        meeting.duration_minutes = meeting_data.duration_minutes
-        meeting.agenda = meeting_data.agenda
-        meeting.updated_at = datetime.now(pytz.timezone('Asia/Shanghai'))
-        db.query(Participant).filter(Participant.meeting_id == meeting_id).delete()
-        for participant_data in meeting_data.participants:
-            user = db.query(User).filter(User.name == participant_data.name).first()
-            if not user:
-                # 处理用户不存在的情况（根据业务需求选择抛错或跳过）
-                raise ValueError(f"用户 '{participant_data.name}' 不存在，请检查姓名是否正确")
-            participant = Participant(
-                id=str(uuid.uuid4()),
-                meeting_id=meeting.id,
-                user_code=str(user.id),
-                name=participant_data.name,
-                email=participant_data.email,
-                user_role=participant_data.user_role,
-                is_required=participant_data.is_required,
-                created_at=datetime.now(shanghai_tz)
+            user_role = (
+                db.query(User.user_role)
+                .filter(User.id == current_user_id_str)
+                .scalar()
+                if current_user_id_str is not None
+                else None
             )
-            db.add(participant)
-        db.commit()
-        db.refresh(meeting)
-        return meeting
+
+            query = db.query(Meeting)
+            if user_role != "admin":
+                query = (
+                    query
+                    .join(Participant, Meeting.id == Participant.meeting_id)
+                    .filter(Participant.user_code == current_user_id_str)
+                )
+
+            # 简单排序，最近的会议在前
+            query = query.order_by(Meeting.date_time.desc())
+            return query.all()
+        except Exception as e:
+            # 保持最小实现，直接抛出以便上层捕获并记录
+            raise e
+
+    async def update_meeting(self,
+                             meeting_id: str,
+                             meeting_data: MeetingUpdate,
+                             db: Session,
+                             current_user_id: str) -> MeetingResponse:
+        """Update a meeting with participants and attachments"""
+        try:
+            # 查询用户角色
+            try:
+                current_user_id_str = str(current_user_id)
+            except (TypeError, ValueError):
+                current_user_id_str = None
+            user_role = (
+                db.query(User.user_role)
+                .filter(User.id == current_user_id_str)
+                .scalar()
+                if current_user_id_str is not None
+                else None
+            )
+
+            query = db.query(Meeting)
+            if user_role != "admin":
+                query = query.join(Participant, Meeting.id == Participant.meeting_id).filter(
+                    Participant.user_code == current_user_id_str)
+            meeting = query.filter(Meeting.id == meeting_id).first()
+            if not meeting:
+                return None
+
+            # Update meeting fields
+            meeting.title = meeting_data.title
+            meeting.description = meeting_data.description
+            meeting.date_time = meeting_data.date_time
+            meeting.location = meeting_data.location
+            meeting.duration_minutes = meeting_data.duration_minutes
+            meeting.updated_at = datetime.now(shanghai_tz)
+
+            # 删除原有的参与者
+            db.query(Participant).filter(Participant.meeting_id == meeting_id).delete()
+            # 创建新的参与者
+            for participant_data in meeting_data.participants:
+                user = db.query(User).filter(User.name == participant_data.name).first()
+                if not user:
+                    raise ValueError(f"用户 '{participant_data.name}' 不存在，请检查姓名是否正确")
+                participant = Participant(
+                    id=str(uuid.uuid4()),
+                    meeting_id=meeting_id,
+                    user_code=str(user.id),
+                    name=participant_data.name,
+                    email=participant_data.email,
+                    user_role=participant_data.user_role,
+                    is_required=participant_data.is_required,
+                    created_at=datetime.now(shanghai_tz)
+                )
+                db.add(participant)
+
+            db.query(Agendas).filter(Agendas.meeting_id == meeting_id).delete()
+            # 创建议程
+            for agenda_data in meeting_data.agendas:
+                db_agenda = Agendas(
+                    agenda_name=agenda_data.agenda_name,
+                    meeting_form=agenda_data.meeting_form,
+                    meeting_id=meeting_id,
+                    is_board_meeting=agenda_data.is_board_meeting,
+                    three_important=agenda_data.three_important,
+                    topic_type1=agenda_data.topic_type1,
+                    topic_type2=agenda_data.topic_type2,
+                    topic_type3=agenda_data.topic_type3,
+                    is_escalation=agenda_data.is_escalation,
+                    created_by=agenda_data.created_by  # 添加创建人字段
+                )
+                db.add(db_agenda)
+
+            db.commit()
+            db.refresh(meeting)
+            return meeting
+
+        except Exception as e:
+            db.rollback()
+            logger.error(f"更新会议服务层错误: {str(e)}")
+            raise
 
 
     async def delete_meeting(self, db: Session, meeting_id: str, current_user_id: str) -> bool:
@@ -172,6 +732,12 @@ class MeetingService(object):
             current_user_id_str = str(current_user_id)
         except (TypeError, ValueError):
             current_user_id_str = None
+            # 首先删除所有关联的附件记录
+        db.query(Attachment).filter(Attachment.meeting_id == meeting_id).delete()
+        # 删除所有关联的议程记录
+        db.query(Agendas).filter(Agendas.meeting_id == meeting_id).delete()
+        # 删除所有关联的参会人员记录
+        db.query(PersonSign).filter(PersonSign.meeting_id == meeting_id).delete()
         user_role = db.query(User.user_role).filter(User.id == current_user_id_str).scalar() if current_user_id_str is not None else None
         query = db.query(Meeting)
         if user_role != "admin":

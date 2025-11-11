@@ -1,16 +1,20 @@
+#标准库
+from loguru import logger
+from typing import Any, Generator
+
 # 第三方库
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from loguru import logger
-from typing import Any
+from sqlalchemy.orm import Session
 
 # 自定义模块
-from db.databases import DatabaseConfig, DatabaseSessionManager
+from db.databases import DMDatabaseManager
 from services.message_service import MessageService
 from services.auth_dependencies import require_auth
-from services.service_models import Message, MessageRecipient, User
-from schemas import MessageCreate, MessageResponse, MessageRecipientResponse, BatchMarkReadRequest, MessageForUserResponse
+
+from models  import Message, MessageRecipient, User
+from schema import MessageCreate, MessageResponse, MessageRecipientResponse, BatchMarkReadRequest, MessageForUserResponse
 
 router = APIRouter(prefix="/api/messages", tags=["Messages"])
 
@@ -18,9 +22,15 @@ router = APIRouter(prefix="/api/messages", tags=["Messages"])
 message_service = MessageService()
 
 # 对外暴露的依赖注入函数
-_db_config = DatabaseConfig()
-_db_manager = DatabaseSessionManager(_db_config)
-get_async_db = _db_manager.get_async_session
+dm_db_manager = DMDatabaseManager()
+def get_db() -> Generator[Session, None, None]:
+    """原contextmanager风格接口：兼容旧代码"""
+    with dm_db_manager.get_db_context() as db:
+        yield db
+def get_async_db() -> Generator[Session, None, None]:
+    """原contextmanager风格接口：兼容旧代码"""
+    with dm_db_manager.get_db_context() as db:
+        yield db
 
 INTERNAL_SERVER_ERROR = "服务器内部错误"
 
@@ -124,31 +134,36 @@ async def list_my_messages(
             page_size=page_size,
         )
 
+        # 批量查询当前页所有消息的接收者记录（避免 N+1 查询）
         results: list[dict] = []
-        for m in messages:
-            # 避免直接访问 m.recipients 触发懒加载，改为按当前用户过滤后查询
+        msg_ids = [m.id for m in messages]
+        if msg_ids:
             rec_rs = await db.execute(
                 select(MessageRecipient).where(
-                    (MessageRecipient.message_id == m.id) &
+                    (MessageRecipient.message_id.in_(msg_ids)) &
                     (MessageRecipient.recipient_id == str(current_user.id))
                 )
             )
-            rec_entity = rec_rs.scalars().first()
-            if not rec_entity:
-                # 如果没有找到当前用户的接收记录，跳过该消息
-                continue
+            rec_entities = rec_rs.scalars().all()
+            rec_map = {r.message_id: r for r in rec_entities}
 
-            data = MessageForUserResponse(
-                id=m.id,
-                title=m.title,
-                content=m.content,
-                sender_id=str(m.sender_id),
-                created_at=m.created_at,
-                recipient_id=str(rec_entity.recipient_id),
-                is_read=rec_entity.is_read,
-                read_at=rec_entity.read_at,
-            )
-            results.append(data.dict())
+            for m in messages:
+                rec_entity = rec_map.get(m.id)
+                if not rec_entity:
+                    # 如果没有找到当前用户的接收记录，跳过该消息
+                    continue
+
+                data = MessageForUserResponse(
+                    id=m.id,
+                    title=m.title,
+                    content=m.content,
+                    sender_id=str(m.sender_id),
+                    created_at=m.created_at,
+                    recipient_id=str(rec_entity.recipient_id),
+                    is_read=rec_entity.is_read,
+                    read_at=rec_entity.read_at,
+                )
+                results.append(data.dict())
 
         total_pages = (total + page_size - 1) // page_size
         has_next = page < total_pages

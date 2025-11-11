@@ -12,7 +12,7 @@ from email.mime.base import MIMEBase
 from email import encoders
 
 # 自定义库
-from services.service_models import Meeting
+from  models import Meeting
 
 logger = logging.getLogger(__name__)
 

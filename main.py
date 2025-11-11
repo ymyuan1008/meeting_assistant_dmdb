@@ -1,4 +1,4 @@
-# 标准库
+﻿# 标准库
 import sys
 import os
 import ssl
@@ -6,16 +6,21 @@ from loguru import logger
 from pathlib import Path
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
+from typing import Generator
 
 # 第三方库
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 from sqlalchemy.ext.declarative import declarative_base
 
+# 提前加载环境变量，确保服务初始化读取到配置
+load_dotenv()
+
 # 自定义类
-from db.databases import DatabaseConfig, DatabaseSessionManager
+from db.databases import DMDatabaseManager
 from db.conn_manager import ConnectionManager
 from services.meeting_service import MeetingService
 from services.document_service import DocumentService
@@ -24,12 +29,17 @@ from services.email_service import EmailService
 import router
 from router import user_manage as user_router
 from router import third_party_manage  # 添加这一行
+from router.third_party_token import router as third_party_token_router  # 新增：第三方令牌生成路由
+
 
 # 对外暴露的依赖注入函数
-db_config = DatabaseConfig()
-db_manager = DatabaseSessionManager(db_config)
-get_db = db_manager.get_sync_session  # 同步会话依赖
-get_async_db = db_manager.get_async_session
+dm_db_manager = DMDatabaseManager()
+def get_async_db() -> Generator[Session, None, None]:
+    """原contextmanager风格接口：兼容旧代码"""
+    with dm_db_manager.get_db_context() as db:
+        yield db
+
+
 
 # Services
 meeting_service = MeetingService()
@@ -37,13 +47,9 @@ document_service = DocumentService()
 speech_service = SpeechService()
 email_service = EmailService()
 
-load_dotenv()
-
 Base = declarative_base()
-engine = create_engine(
-    db_config.sync_url,
-    echo=True  # Set to False in production
-)
+engine = dm_db_manager.create_sync_engine()
+
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
@@ -133,7 +139,9 @@ app.include_router(router.user_manage)
 app.include_router(router.meeting_manage)
 app.include_router(router.attendance_manage)
 app.include_router(router.message_manage)
+app.include_router(router.presence_manage)
 app.include_router(third_party_manage.router)  # 添加这一行
+app.include_router(third_party_token_router)  # 新增：注册 /api/v1/third-party/token 路由
 
 # 健康检查
 from router.health_check import router as health_router
