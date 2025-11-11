@@ -6,7 +6,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, De
 from sqlalchemy.orm import Session
 
 from db.conn_manager import ConnectionManager
-from db.databases import DMDatabaseManager
+from db.databases import DMSyncConfig, DMSyncManager
 from services.auth_service import AuthService
 from services.user_service import UserService
 from services.meeting_service import MeetingService
@@ -19,15 +19,12 @@ from models  import Participant, User
 router = APIRouter(prefix="/api/meetings", tags=["Presence"])
 presence_manager = ConnectionManager()
 
-dm_db_manager = DMDatabaseManager()
-def get_db() -> Generator[Session, None, None]:
-    """原contextmanager风格接口：兼容旧代码"""
-    with dm_db_manager.get_db_context() as db:
-        yield db
-def get_async_db() -> Generator[Session, None, None]:
-    """原contextmanager风格接口：兼容旧代码"""
-    with dm_db_manager.get_db_context() as db:
-        yield db
+# 对外暴露的依赖注入函数
+db_config = DMSyncConfig()
+db_manager = DMSyncManager(db_config)
+get_db = db_manager.get_session_dependency  # 同步会话依赖
+get_async_db = db_manager.get_session_dependency
+
 
 
 auth_service = AuthService()

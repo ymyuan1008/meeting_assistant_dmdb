@@ -10,7 +10,7 @@ from loguru import logger
 from utils.encryption import rsa_encryption
 
 # 自定义模块
-from db.databases import DMDatabaseManager
+from db.databases import DMSyncConfig, DMSyncManager
 from services.user_service import UserService
 from services.auth_service import AuthService
 from services.auth_dependencies import require_auth, require_admin
@@ -25,17 +25,10 @@ user_service = UserService()
 auth_service = AuthService()
 
 # 对外暴露的依赖注入函数
-dm_db_manager = DMDatabaseManager()
+db_config = DMSyncConfig()
+db_manager = DMSyncManager(db_config)
+get_db = db_manager.get_session_dependency  # 同步会话依赖
 
-# 对外暴露的依赖注入函数（与FastAPI路由配合使用）
-def get_db() -> Generator[Session, None, None]:
-    """原contextmanager风格接口：兼容旧代码"""
-    with dm_db_manager.get_db_context() as db:
-        yield db
-def get_async_db() -> Generator[Session, None, None]:
-    """原contextmanager风格接口：兼容旧代码"""
-    with dm_db_manager.get_db_context() as db:
-        yield db
 
 # ----------------------------- 辅助方法 -----------------------------
 

@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 # 自定义模块
-from db.databases import DMDatabaseManager
+from db.databases import DMSyncConfig, DMSyncManager
 from services.message_service import MessageService
 from services.auth_dependencies import require_auth
 
@@ -22,15 +22,11 @@ router = APIRouter(prefix="/api/messages", tags=["Messages"])
 message_service = MessageService()
 
 # 对外暴露的依赖注入函数
-dm_db_manager = DMDatabaseManager()
-def get_db() -> Generator[Session, None, None]:
-    """原contextmanager风格接口：兼容旧代码"""
-    with dm_db_manager.get_db_context() as db:
-        yield db
-def get_async_db() -> Generator[Session, None, None]:
-    """原contextmanager风格接口：兼容旧代码"""
-    with dm_db_manager.get_db_context() as db:
-        yield db
+db_config = DMSyncConfig()
+db_manager = DMSyncManager(db_config)
+get_db = db_manager.get_session_dependency  # 同步会话依赖
+get_async_db = db_manager.get_session_dependency
+
 
 INTERNAL_SERVER_ERROR = "服务器内部错误"
 

@@ -20,7 +20,8 @@ from fastapi import UploadFile, File, Form, status
 from fastapi import APIRouter,HTTPException, Depends
 
 #自定义库
-from db.databases import DMDatabaseManager
+
+from db.databases import DMSyncConfig, DMSyncManager
 from db.conn_manager import ConnectionManager
 
 from services.meeting_service import MeetingService
@@ -85,16 +86,11 @@ get_db = db_manager.get_sync_session  # 同步会话依赖
 get_async_db = db_manager.get_async_session
 """
 
-dm_db_manager = DMDatabaseManager()
+db_config = DMSyncConfig()
+db_manager = DMSyncManager(db_config)
+get_db = db_manager.get_session_dependency  # 同步会话依赖
 
-def get_db() -> Generator[Session, None, None]:
-    """原contextmanager风格接口：兼容旧代码"""
-    with dm_db_manager.get_db_context() as db:
-        yield db
-def get_async_db() -> Generator[Session, None, None]:
-    """原contextmanager风格接口：兼容旧代码"""
-    with dm_db_manager.get_db_context() as db:
-        yield db
+
 
 async def handle_file_upload(file: UploadFile, user_id: str) -> Dict[str, Any]:
     """处理单个文件上传

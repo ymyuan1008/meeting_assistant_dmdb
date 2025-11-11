@@ -20,7 +20,7 @@ from sqlalchemy.ext.declarative import declarative_base
 load_dotenv()
 
 # 自定义类
-from db.databases import DMDatabaseManager
+from db.databases import DMSyncConfig, DMSyncManager
 from db.conn_manager import ConnectionManager
 from services.meeting_service import MeetingService
 from services.document_service import DocumentService
@@ -33,11 +33,9 @@ from router.third_party_token import router as third_party_token_router  # 新�
 
 
 # 对外暴露的依赖注入函数
-dm_db_manager = DMDatabaseManager()
-def get_async_db() -> Generator[Session, None, None]:
-    """原contextmanager风格接口：兼容旧代码"""
-    with dm_db_manager.get_db_context() as db:
-        yield db
+db_config = DMSyncConfig()
+db_manager = DMSyncManager(db_config)
+get_db = db_manager.get_session_dependency  # 同步会话依赖
 
 
 
