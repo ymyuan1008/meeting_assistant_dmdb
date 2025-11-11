@@ -16,15 +16,15 @@
 ### 环境要求
 
 - Python 3.12+
-- MySQL 8.0+
+- DM 8.0+
 - FFmpeg（音频处理）
 
 ### 安装和运行
 
 1. **克隆项目**
    ```bash
-   git clone https://github.com/nanami404/meeting.git
-   cd meeting
+   git clone  ymyuan1008/meeting_assistant_dmdb
+   cd meeting_assistant_dmdb
    ```
 
 2. **安装依赖**
