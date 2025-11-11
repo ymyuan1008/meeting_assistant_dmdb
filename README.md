@@ -23,8 +23,8 @@
 
 1. **克隆项目**
    ```bash
-   git clone https://github.com/nanami404/meeting.git
-   cd meeting
+   git clone  ymyuan1008/meeting_assistant_dmdb
+   cd meeting_assistant_dmdb
    ```
 
 2. **安装依赖**
