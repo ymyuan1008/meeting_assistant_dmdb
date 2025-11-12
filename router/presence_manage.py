@@ -180,7 +180,7 @@ async def presence_ws(websocket: WebSocket, meeting_id: str) -> None:
 async def get_online_count(
     meeting_id: str,
     current_user: User = Depends(require_auth),
-    db: Session = Depends(get_async_db())
+    db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """查询会议在线人员数量（需要访问权限）"""
     user_id = str(current_user.id)
@@ -196,7 +196,7 @@ async def get_online_count(
 async def get_online_users(
     meeting_id: str,
     current_user: User = Depends(require_auth),
-    db: Session = Depends(db_manager.get_sync_session)
+    db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """查询会议在线用户列表（需要访问权限）"""
     user_id = str(current_user.id)

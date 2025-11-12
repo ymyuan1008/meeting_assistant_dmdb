@@ -6,14 +6,12 @@ from typing import Any
 
 # 第三方库
 from sqlalchemy import Column, DateTime, func
-from sqlalchemy.ext.declarative import declarative_base
+from db.databases import Base
 
 # 初始化上海时区
 shanghai_tz = pytz.timezone('Asia/Shanghai')
 
 # SQLAlchemy 基础模型
-Base = declarative_base()
-
 class BaseModel(Base):
     """所有数据库模型的基类，提供公共字段和方法"""
     __abstract__ = True  # 抽象类，不生成实际表

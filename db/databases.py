@@ -108,7 +108,8 @@ class DMSyncManager:
                 max_overflow=self.config.max_overflow,
                 pool_recycle=self.config.pool_recycle,
                 pool_timeout=self.config.pool_timeout,
-                pool_pre_ping=True  # 连接有效性校验
+                pool_pre_ping=True,
+                isolation_level="READ COMMITTED"
             )
             self._setup_connection_hooks(self.sync_engine)
             self._test_connection()

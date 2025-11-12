@@ -7,7 +7,7 @@ from typing import Union, Dict, Any, List, Optional
 # 第三方库
 from pydantic import BaseModel as PydanticBaseModel  # 重命名Pydantic基类，避免冲突
 from pydantic import Field, validator
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Index, Integer, Boolean, func, DateTime
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Index, Integer, Boolean, func, text
 from sqlalchemy.orm import relationship
 
 # 自定义库：导入SQLAlchemy的数据库基类
@@ -29,7 +29,7 @@ class Transcription(SQLBaseModel):  # 继承SQL基类
     speaker_id = Column(String(50), nullable=False)
     speaker_name = Column(String(50))
     text_message = Column(Text, nullable=False)
-    created_time = Column(DateTime(timezone=True), default=func.utcnow(), nullable=False)
+    created_time = Column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"), nullable=False)
     is_action_item = Column(Boolean, default=False)
     is_decision = Column(Boolean, default=False)
 
@@ -50,7 +50,7 @@ class TranscriptionText(SQLBaseModel):  # 继承SQL基类
     other_meeting_id = Column(String(100), nullable=False)
     speaker_name = Column(String(100), nullable=True)
     text_message = Column(Text, nullable=False)
-    created_time = Column(DateTime, default=func.utcnow)
+    created_time = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
 
     __table_args__ = (
         Index('idx_translation_texts_meeting_id', 'meeting_id'),

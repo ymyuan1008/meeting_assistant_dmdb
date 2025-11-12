@@ -1,7 +1,7 @@
 from datetime import datetime
 
 # 第三方库
-from sqlalchemy import BigInteger, String, Text, ForeignKey, Index, Boolean, func
+from sqlalchemy import BigInteger, String, Text, ForeignKey, Index, Boolean, func, text
 from sqlalchemy import Column, DateTime
 from sqlalchemy.orm import relationship
 
@@ -28,8 +28,8 @@ class Message(BaseModel):
     sender = relationship("User", foreign_keys=[sender_id], lazy="selectin")
 
     # 时间戳
-    created_at = Column(DateTime(timezone=True), default=func.now(), comment="创建时间")
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), comment="更新时间")
+    created_at = Column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
+    updated_at = Column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
 
     # 关联关系 - 与MessageRecipient的一对多关系
     recipients = relationship("MessageRecipient", back_populates="message", cascade="all, delete-orphan")
@@ -60,7 +60,7 @@ class MessageRecipient(BaseModel):
     read_at = Column(DateTime(timezone=True), nullable=True, comment="阅读时间")
 
     # 时间戳字段
-    created_at = Column(DateTime(timezone=True), default=func.now(), comment="创建时间")
+    created_at = Column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
 
     # 关联关系
     message = relationship("Message", back_populates="recipients")

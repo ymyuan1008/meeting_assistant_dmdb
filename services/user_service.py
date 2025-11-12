@@ -105,19 +105,10 @@ class UserService(object):
                 query = query.filter(User.company.like(f"%{company_keyword}%"))
 
             # 计算总数
-            total = query.count()
-
-            # 排序
             sort_col = getattr(User, order_by, User.name)
-            if order.lower() == "desc":
-                query = query.order_by(sort_col.desc())
-            else:
-                query = query.order_by(sort_col.asc())
-
-            # 分页
-            page = max(1, page)
-            page_size = max(1, page_size)
-            items = query.offset((page - 1) * page_size).limit(page_size).all()
+            desc = (order.lower() == "desc")
+            from utils.pagination import paginate_ids_with_row_number
+            items, total = paginate_ids_with_row_number(db, query, User.id, sort_col, desc, page, page_size)
             return items, total
         except Exception as e:
             logger.error(f"公共用户列表查询失败: {e}")
@@ -170,16 +161,10 @@ class UserService(object):
             if company_keyword:
                 query = query.filter(User.company.like(f"%{company_keyword}%"))
 
-            total = query.count()
-
-            # 排序
             sort_col = getattr(User, order_by, User.created_at)
-            query = query.order_by(sort_col.desc() if order.lower() == "desc" else sort_col.asc())
-
-            # 分页
-            page = max(1, page)
-            page_size = max(1, page_size)
-            items = query.offset((page - 1) * page_size).limit(page_size).all()
+            desc = (order.lower() == "desc")
+            from utils.pagination import paginate_ids_with_row_number
+            items, total = paginate_ids_with_row_number(db, query, User.id, sort_col, desc, page, page_size)
             return items, total
         except Exception as e:
             logger.error(f"查询用户列表失败: {e}")

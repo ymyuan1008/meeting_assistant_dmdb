@@ -2,7 +2,7 @@
 from enum import Enum
 
 # 第三方库
-from sqlalchemy import Column, String, Index, ForeignKey,DateTime
+from sqlalchemy import Column, String, Index, ForeignKey,DateTime, text
 from sqlalchemy.orm import relationship
 
 # 自定义库
@@ -53,8 +53,8 @@ class User(BaseModel):
     password_hash = Column(String(255), nullable=False, comment="密码哈希值（bcrypt加密）")
 
     # 时间戳字段
-    created_at = Column(DateTime(timezone=True), default=BaseModel.get_shanghai_time, comment="创建时间")
-    updated_at = Column(DateTime(timezone=True), default=BaseModel.get_shanghai_time, comment="更新时间")
+    created_at = Column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
+    updated_at = Column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
 
     # 关联字段
     created_by = Column(String(50), ForeignKey("users.id"), nullable=True, comment="创建者用户ID")

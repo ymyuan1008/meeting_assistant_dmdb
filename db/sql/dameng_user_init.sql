@@ -26,7 +26,7 @@ END;
 -- 创建用户表（字段与MySQL版本保持一致）
 CREATE TABLE users (
     -- 主键字段（通过序列+触发器实现自增，模拟MySQL AUTO_INCREMENT）
-    id            BIGINT    IDENTITY(1,1)     NOT NULL,
+    id            VARCHAR2(36)               NOT NULL,
 
     -- 基本信息字段
     name          VARCHAR2(100)      NOT NULL,
@@ -48,8 +48,8 @@ CREATE TABLE users (
     updated_at    TIMESTAMP          DEFAULT CURRENT_TIMESTAMP NOT NULL,
 
     -- 关联字段
-    created_by    NUMBER(19)         DEFAULT NULL,
-    updated_by    NUMBER(19)         DEFAULT NULL,
+    created_by    VARCHAR2(36)       DEFAULT NULL,
+    updated_by    VARCHAR2(36)       DEFAULT NULL,
 
     -- 主键约束
     CONSTRAINT pk_users PRIMARY KEY (id),

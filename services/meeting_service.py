@@ -268,11 +268,13 @@ class MeetingService(object):
                 Meeting.date_time,
                 Meeting.title,
                 Meeting.duration_minutes
-            ).order_by(Meeting.date_time.desc()) \
-                .offset(skip).limit(limit)
+            ).order_by(Meeting.date_time.desc())
 
             # 执行查询并处理结果
-            results = query.all()
+            results_all = query.all()
+            start = max(0, skip)
+            end = start + max(1, limit)
+            results = results_all[start:end]
 
             meetings = []
             for row in results:

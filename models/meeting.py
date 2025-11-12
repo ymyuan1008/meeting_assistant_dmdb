@@ -1,5 +1,5 @@
 # 第三方库
-from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey, Index
+from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey, Index, text
 from sqlalchemy.orm import relationship
 
 # 自定义库
@@ -17,9 +17,8 @@ class Meeting(BaseModel):
     duration_minutes = Column(Integer, default=60)
     # 状态：scheduled(已排期), in_progress(进行中), completed(已完成), cancelled(已取消)
     status = Column(String(50), default="scheduled")
-    created_at = Column(DateTime(timezone=True), default=BaseModel.get_shanghai_time)
-    updated_at = Column(DateTime(timezone=True), default=BaseModel.get_shanghai_time,
-                        onupdate=BaseModel.get_shanghai_time)
+    created_at = Column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
+    updated_at = Column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
 
     # 关联字段：创建者/更新者
     created_by = Column(String(50), ForeignKey("users.id"), nullable=True, comment="创建者用户ID")

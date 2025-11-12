@@ -1,4 +1,4 @@
-﻿# 标准库
+# 标准库
 import sys
 import os
 import ssl
@@ -12,15 +12,13 @@ from typing import Generator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from sqlalchemy.ext.declarative import declarative_base
 
 # 提前加载环境变量，确保服务初始化读取到配置
 load_dotenv()
 
 # 自定义类
-from db.databases import DMSyncConfig, DMSyncManager
+from db.databases import DMSyncConfig, DMSyncManager, Base
 from db.conn_manager import ConnectionManager
 from services.meeting_service import MeetingService
 from services.document_service import DocumentService
@@ -45,11 +43,8 @@ document_service = DocumentService()
 speech_service = SpeechService()
 email_service = EmailService()
 
-Base = declarative_base()
-engine = dm_db_manager.create_sync_engine()
-
-# Create database tables
-Base.metadata.create_all(bind=engine)
+db_manager.init_engine()
+db_manager.init_tables()
 
 
 # ✅ 新增：Lifespan 事件处理器

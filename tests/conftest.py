@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import os
 import sys
 import pytest
@@ -13,22 +13,25 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from router import user_manage as user_router
-from services.service_models import Base, User, UserRole, UserStatus
+from db.databases import Base
+from models import User
+from models.user import UserRole, UserStatus
 import bcrypt
 
 # 允许在某些测试场景下跳过数据库初始化（例如纯路由功能测试）
 SKIP_DB_SETUP = os.getenv("SKIP_DB_SETUP_FOR_TESTS", "0") == "1"
 
-# 使用本地SQLite文件，便于并发与跨线程访问
-TEST_DB_URL = "sqlite:///./test_api.db"
+TEST_DB_URL = os.getenv("TEST_DB_URL", "sqlite:///./test_api.db")
 
 # 默认占位，避免在跳过模式下引用未定义变量
 engine = None
 TestingSessionLocal = None
 
 if not SKIP_DB_SETUP:
-    # 创建测试数据库引擎与会话工厂
-    engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
+    if TEST_DB_URL.startswith("sqlite"):
+        engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
+    else:
+        engine = create_engine(TEST_DB_URL)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     # 创建所有模型表
     Base.metadata.create_all(bind=engine)

@@ -95,22 +95,20 @@ class MessageService(object):
         count_result = await db.execute(count_q)
         total = int(count_result.scalar() or 0)
 
-        # 计算偏移
-        offset = max(0, (page - 1) * page_size)
-
-        # 先分页获取消息ID，避免 join 集合导致分页偏差
+        # 先获取有序的消息ID集合，再做切片，避免依赖 LIMIT/OFFSET 在部分驱动上的不兼容
         ids_q = (
             select(Message.id)
             .join(MessageRecipient, MessageRecipient.message_id == Message.id)
             .where(*conditions)
             .group_by(Message.id)
             .order_by(Message.created_at.desc())
-            .offset(offset)
-            .limit(page_size)
         )
         ids_result = await db.execute(ids_q)
         id_rows = ids_result.all()
-        ids = [row[0] for row in id_rows]
+        all_ids = [row[0] for row in id_rows]
+        start = max(0, (page - 1) * page_size)
+        end = start + max(1, page_size)
+        ids = all_ids[start:end]
 
         if not ids:
             return [], total
@@ -149,9 +147,9 @@ class MessageService(object):
         result = await db.execute(
             select(MessageRecipient).where(
                 (MessageRecipient.message_id == mid_int) & (MessageRecipient.recipient_id == rid_str)
-            ).limit(1)
+            )
         )
-        mr = result.scalar_one_or_none()
+        mr = result.scalars().first()
 
         if not mr:
             return False

@@ -86,7 +86,6 @@ async def send_message(payload: MessageCreate,
         msg_rs = await db.execute(
             select(Message.title, Message.content, Message.sender_id, Message.created_at)
             .where(Message.id == msg.id)
-            .limit(1)
         )
         row = msg_rs.first()
         if not row:
