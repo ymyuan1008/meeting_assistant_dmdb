@@ -1,12 +1,15 @@
 from typing import Optional, Dict, Any, Generator
 import json
+from loguru import logger
 from datetime import datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends, status
 from sqlalchemy.orm import Session
 
 from db.conn_manager import ConnectionManager
-from db.databases import DMSyncConfig, DMSyncManager
+from db.databases import DMDatabaseAdapter
+from db.dm_conn import get_db, get_async_db, Base, dm_db_manager
+
 from services.auth_service import AuthService
 from services.user_service import UserService
 from services.meeting_service import MeetingService
@@ -20,10 +23,6 @@ router = APIRouter(prefix="/api/meetings", tags=["Presence"])
 presence_manager = ConnectionManager()
 
 # 对外暴露的依赖注入函数
-db_config = DMSyncConfig()
-db_manager = DMSyncManager(db_config)
-get_db = db_manager.get_session_dependency  # 同步会话依赖
-get_async_db = db_manager.get_session_dependency
 
 
 
@@ -180,7 +179,7 @@ async def presence_ws(websocket: WebSocket, meeting_id: str) -> None:
 async def get_online_count(
     meeting_id: str,
     current_user: User = Depends(require_auth),
-    db: Session = Depends(get_async_db())
+    db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """查询会议在线人员数量（需要访问权限）"""
     user_id = str(current_user.id)
@@ -196,7 +195,7 @@ async def get_online_count(
 async def get_online_users(
     meeting_id: str,
     current_user: User = Depends(require_auth),
-    db: Session = Depends(db_manager.get_sync_session)
+    db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """查询会议在线用户列表（需要访问权限）"""
     user_id = str(current_user.id)

@@ -31,7 +31,8 @@ from services.email_service import EmailService
 
 from schema import MeetingCreate, MeetingResponse, TranscriptionCreate, PersonSignResponse,ParticipantCreate
 from db.conn_manager import ConnectionManager
-from db.databases import DMSyncConfig, DMSyncManager
+from db.databases import DMDatabaseAdapter
+from db.dm_conn import get_db, get_async_db, Base, dm_db_manager
 
 from services.auth_dependencies import require_auth, require_admin
 
@@ -39,9 +40,6 @@ from models import User, UserStatus, UserRole
 from schema import SignRequest
 
 # 对外暴露的依赖注入函数
-db_config = DMSyncConfig()
-db_manager = DMSyncManager(db_config)
-get_db = db_manager.get_session_dependency  # 同步会话依赖
 
 
 router = APIRouter()

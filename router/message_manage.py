@@ -9,7 +9,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 # 自定义模块
-from db.databases import DMSyncConfig, DMSyncManager
+from db.databases import DMDatabaseAdapter
+from db.dm_conn import get_db, get_async_db, Base, dm_db_manager
+
 from services.message_service import MessageService
 from services.auth_dependencies import require_auth
 
@@ -21,11 +23,6 @@ router = APIRouter(prefix="/api/messages", tags=["Messages"])
 # Services
 message_service = MessageService()
 
-# 对外暴露的依赖注入函数
-db_config = DMSyncConfig()
-db_manager = DMSyncManager(db_config)
-get_db = db_manager.get_session_dependency  # 同步会话依赖
-get_async_db = db_manager.get_session_dependency
 
 
 INTERNAL_SERVER_ERROR = "服务器内部错误"
@@ -37,7 +34,7 @@ def _resp(data=None, message: str = "success", code: int = 0) -> dict[str, Any]:
 
 @router.post("/send", summary="发送消息", response_model=dict)
 async def send_message(payload: MessageCreate,
-                       db: AsyncSession = Depends(get_async_db),
+                       db: Session = Depends(get_db),
                        current_user: User = Depends(require_auth)):
     """发送消息，仅返回操作结果信息"""
     try:
@@ -114,7 +111,7 @@ async def list_my_messages(
     page: int = Query(default=1, ge=1, description="页码，从1开始"),
     page_size: int = Query(default=20, ge=1, le=100, description="每页数量，最大100"),
     only_unread: bool | None = Query(default=None, description="是否仅查询未读消息"),
-    db: AsyncSession = Depends(get_async_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(require_auth),
 ):
     """查询当前用户收到的消息（支持分页）"""
@@ -122,7 +119,7 @@ async def list_my_messages(
         # 根据 only_unread 控制是否仅查询未读消息；未提供则视为 False
         only_unread_effective = only_unread if only_unread is not None else False
 
-        messages, total = await message_service.list_messages(
+        messages, total =await  message_service.list_messages(
             db,
             recipient_id=str(current_user.id),
             only_unread=only_unread_effective,
@@ -134,7 +131,7 @@ async def list_my_messages(
         results: list[dict] = []
         msg_ids = [m.id for m in messages]
         if msg_ids:
-            rec_rs = await db.execute(
+            rec_rs = db.execute(
                 select(MessageRecipient).where(
                     (MessageRecipient.message_id.in_(msg_ids)) &
                     (MessageRecipient.recipient_id == str(current_user.id))
@@ -183,7 +180,7 @@ async def list_my_messages(
 
 @router.post("/{message_id}/mark-read", summary="标记消息为已读", response_model=dict)
 async def mark_read(message_id: str,
-                    db: AsyncSession = Depends(get_async_db),
+                    db: Session = Depends(get_db),
                     current_user: User = Depends(require_auth)):
     """将当前用户的指定消息标记为已读"""
     try:
@@ -200,7 +197,7 @@ async def mark_read(message_id: str,
 
 @router.post("/mark-read/batch", summary="批量标记消息为已读", response_model=dict)
 async def mark_read_batch(payload: BatchMarkReadRequest,
-                          db: AsyncSession = Depends(get_async_db),
+                          db: Session = Depends(get_db),
                           current_user: User = Depends(require_auth)):
     """批量将当前用户的指定消息标记为已读"""
     try:
@@ -224,7 +221,7 @@ async def mark_read_batch(payload: BatchMarkReadRequest,
 async def delete_message_links(
     is_read: bool | None = Query(default=None, description="按已读/未读状态删除；不传表示不限"),
     message_id: str | None = Query(default=None, description="指定消息ID；与 is_read 可组合过滤"),
-    db: AsyncSession = Depends(get_async_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(require_auth),
 ):
     """安全删除当前用户与消息的关联关系

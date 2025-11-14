@@ -216,7 +216,7 @@ class MeetingService(object):
             skip: int = 0,
             limit: int = 100
     ) -> List[DailyWorkResponse]:
-        """获取用户会议信息 - 修复GROUP BY问题"""
+        """获取用户会议信息 - 适配达梦数据库"""
         try:
             # 获取用户角色
             user_role = db.query(User.user_role).filter(
@@ -227,7 +227,6 @@ class MeetingService(object):
             if user_role != "admin":
                 logger.info(f"用户 {current_user_id} 非admin角色，无权限查询数据")
                 return []
-            participants_list = participants_list
 
             # 处理参与者列表为空的情况
             if not participants_list:
@@ -236,11 +235,15 @@ class MeetingService(object):
                     Meeting.id,
                     Meeting.date_time,
                     Meeting.title,
-                    func.group_concat(func.distinct(Agendas.agenda_name)).label('agenda'),
-                    func.group_concat(func.distinct(Transcription.text_message)).label('text_message'),
+                    # 达梦使用listagg进行分组拼接，distinct去重，分隔符为逗号
+                    func.listagg(func.distinct(Agendas.agenda_name), ',').within_group(Agendas.agenda_name).label(
+                        'agenda'),
+                    func.listagg(func.distinct(Transcription.text_message), ',').within_group(
+                        Transcription.text_message).label('text_message'),
+                    # 达梦需显式转换为浮点型避免整数除法取整
                     (Meeting.duration_minutes / 60).label('duration_minutes'),
-                    func.group_concat(func.distinct(User.name)).label('participant_names'),
-                    func.group_concat(func.distinct(User.company)).label('company_names')
+                    func.listagg(func.distinct(User.name), ',').within_group(User.name).label('participant_names'),
+                    func.listagg(func.distinct(User.company), ',').within_group(User.company).label('company_names')
                 ).join(Participant, Meeting.id == Participant.meeting_id) \
                     .join(User, Participant.user_code == User.id) \
                     .join(Agendas, Agendas.meeting_id == Meeting.id) \
@@ -251,25 +254,26 @@ class MeetingService(object):
                     Meeting.id,
                     Meeting.date_time,
                     Meeting.title,
-                    func.group_concat(func.distinct(Agendas.agenda_name)).label('agenda'),
-                    func.group_concat(func.distinct(Transcription.text_message)).label('text_message'),
-                    (Meeting.duration_minutes / 60).label('duration_minutes'),
-                    func.group_concat(func.distinct(User.name)).label('participant_names'),
-                    func.group_concat(func.distinct(User.company)).label('company_names')
+                    func.listagg(func.distinct(Agendas.agenda_name), ',').within_group(Agendas.agenda_name).label(
+                        'agenda'),
+                    func.listagg(func.distinct(Transcription.text_message), ',').within_group(
+                        Transcription.text_message).label('text_message'),
+                    (Meeting.duration_minutes/ 60).label('duration_minutes'),
+                    func.listagg(func.distinct(User.name), ',').within_group(User.name).label('participant_names'),
+                    func.listagg(func.distinct(User.company), ',').within_group(User.company).label('company_names')
                 ).join(Participant, Meeting.id == Participant.meeting_id) \
                     .join(User, Participant.user_code == User.id) \
                     .join(Agendas, Agendas.meeting_id == Meeting.id) \
                     .join(Transcription, Meeting.id == Transcription.meeting_id) \
-                    .filter(Participant.user_code.in_(participants_list))  # 仅在列表非空时添加过滤条件
+                    .filter(Participant.user_code.in_(participants_list))  # 过滤参与者
 
-            # 统一添加 GROUP BY、排序和分页（与原逻辑一致）
+            # 统一添加 GROUP BY、排序和分页
             query = query.group_by(
                 Meeting.id,
                 Meeting.date_time,
                 Meeting.title,
-                Meeting.duration_minutes
-            ).order_by(Meeting.date_time.desc()) \
-                .offset(skip).limit(limit)
+                Meeting.duration_minutes  # 达梦要求GROUP BY包含所有非聚合列
+            )
 
             # 执行查询并处理结果
             results = query.all()
@@ -283,23 +287,26 @@ class MeetingService(object):
                     'agenda': row.agenda,
                     'text_message': row.text_message,
                     'duration_minutes': row.duration_minutes,
-                    'participant_names': row.participant_names.split(',') if row.participant_names else [],
-                    'company_names': row.company_names.split(',') if row.company_names else []
+                    # 处理空值（达梦拼接空值可能返回空字符串而非None）
+                    'participant_names': row.participant_names.split(
+                        ',') if row.participant_names and row.participant_names != '' else [],
+                    'company_names': row.company_names.split(
+                        ',') if row.company_names and row.company_names != '' else []
                 })
 
             logger.info(f"成功查询到 {len(meetings)} 个会议")
             return meetings
 
         except Exception as e:
-            logger.error(f"Failed to retrieve meetings for user: {current_user_id}, error: {str(e)}")
+            logger.error(f"查询会议失败（用户: {current_user_id}），错误: {str(e)}")
             raise
 
     async def get_ledger_info(
             self,
             db: Session,
             current_user_id: str
-    )->list[MeetingLedgerResponse]:
-        """获取用户会议信息 - 修复GROUP BY问题"""
+    ) -> list[MeetingLedgerResponse]:
+        """获取用户会议信息 - 适配达梦数据库"""
         try:
             # 获取用户角色
             user_role = db.query(User.user_role).filter(
@@ -310,7 +317,6 @@ class MeetingService(object):
             if user_role != "admin":
                 logger.info(f"用户 {current_user_id} 非admin角色，无权限查询数据")
                 return []
-            # 关键：添加完整的 GROUP BY 子句
 
             query = db.query(
                 # 非聚合列（与 GROUP BY 严格对应）
@@ -325,13 +331,17 @@ class MeetingService(object):
                 Agendas.is_escalation,
                 Meeting.date_time,
                 Meeting.title,
-                literal("线上会议").label("meeting_type"),  # 常量1：线上会议（添加标签便于识别）
-                literal("未知").label("host_user"),  # 常量2：未知（添加标签）
-                # 聚合函数列（匹配 SQL 中的别名和逻辑）
-                func.group_concat(PersonSign.name).label('participant_names'),
-                func.count(distinct(PersonSign.user_code)).label('planned_attendance'),
-                func.sum(PersonSign.is_signed).label('actual_attendance')
-            ).select_from(Meeting).outerjoin(User, Meeting.created_by == User.id).outerjoin(PersonSign, Meeting.id == PersonSign.meeting_id).join(Agendas, Meeting.id == Agendas.meeting_id).group_by(
+                literal("线上会议").label("meeting_type"),  # 常量：线上会议
+                literal("未知").label("host_user"),  # 常量：未知
+                # 聚合函数列（达梦用listagg替换group_concat）
+                func.listagg(func.distinct(PersonSign.name), ',').label('participant_names'),  # 拼接参会人姓名，去重
+                func.count(func.distinct(PersonSign.user_code)).label('planned_attendance'),  # 达梦支持count(distinct)
+                func.sum(PersonSign.is_signed).label('actual_attendance')  # 求和逻辑不变
+            ).select_from(Meeting) \
+                .outerjoin(User, Meeting.created_by == User.id) \
+                .outerjoin(PersonSign, Meeting.id == PersonSign.meeting_id) \
+                .join(Agendas, Meeting.id == Agendas.meeting_id) \
+                .group_by(
                 Agendas.agenda_id,
                 Agendas.agenda_name,
                 User.company,
@@ -343,41 +353,42 @@ class MeetingService(object):
                 Agendas.is_escalation,
                 Meeting.date_time,
                 Meeting.title
-            ).filter(Agendas.agenda_id.isnot(None))
+            ) \
+                .filter(Agendas.agenda_id.isnot(None))
 
             # 执行查询
             ledger_results = query.all()
 
             ledger_info = []
-
             for row in ledger_results:
-                # 构建标准化输出字典（严格匹配查询字段）
+                # 处理participant_names空值（达梦可能返回空字符串而非None）
+                participant_names = row.participant_names.split(
+                    ',') if row.participant_names and row.participant_names != '' else []
                 ledger_info.append({
                     "agenda_id": row.agenda_id,
                     "agenda_name": row.agenda_name,
                     "company": row.company,
                     "three_important": row.three_important,
-                    "topic_type1":   row.topic_type1,
-                    "topic_type2":   row.topic_type2,
-                    "topic_type3":    row.topic_type3,
+                    "topic_type1": row.topic_type1,
+                    "topic_type2": row.topic_type2,
+                    "topic_type3": row.topic_type3,
                     "is_board_meeting": row.is_board_meeting,
                     "is_escalation": row.is_escalation,
                     "meeting_time": row.date_time,
                     "meeting_type": row.meeting_type,
                     "meeting_title": row.title,
                     "host_user": row.host_user,
-                    "participant_user": row.participant_names ,
+                    "participant_user": participant_names,  # 转换为列表
                     "planned_attendance": row.planned_attendance,
                     "actual_attendance": row.actual_attendance
                 })
-                print("输出的meetings",ledger_info)
 
             logger.info(f"会议台账查询成功，返回 {len(ledger_info)} 条记录")
             return ledger_info
 
         except Exception as e:
-            logger.error(f"会议台账查询失败：{str(e)}", exc_info=True)  # 增加堆栈信息便于调试
-            raise  # 抛出异常由上层统一处理（如返回500错误）
+            logger.error(f"会议台账查询失败：{str(e)}", exc_info=True)
+            raise
 
 
     async def export_daily_work(

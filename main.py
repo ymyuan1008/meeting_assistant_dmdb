@@ -20,7 +20,8 @@ from sqlalchemy.ext.declarative import declarative_base
 load_dotenv()
 
 # 自定义类
-from db.databases import DMSyncConfig, DMSyncManager
+from db.databases import DMDatabaseAdapter
+from db.dm_conn import get_db, get_async_db, Base, dm_db_manager
 from db.conn_manager import ConnectionManager
 from services.meeting_service import MeetingService
 from services.document_service import DocumentService
@@ -32,12 +33,6 @@ from router import third_party_manage  # 添加这一行
 from router.third_party_token import router as third_party_token_router  # 新增：第三方令牌生成路由
 
 
-# 对外暴露的依赖注入函数
-db_config = DMSyncConfig()
-db_manager = DMSyncManager(db_config)
-get_db = db_manager.get_session_dependency  # 同步会话依赖
-
-
 
 # Services
 meeting_service = MeetingService()
@@ -45,11 +40,7 @@ document_service = DocumentService()
 speech_service = SpeechService()
 email_service = EmailService()
 
-Base = declarative_base()
-engine = dm_db_manager.create_sync_engine()
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
 
 
 # ✅ 新增：Lifespan 事件处理器
@@ -60,9 +51,9 @@ async def lifespan(app: FastAPI):
     logger.info("Meeting Assistant API 正在启动...")
     # 可在此处添加初始化逻辑，如连接池预热、缓存加载等
     logger.success("Meeting Assistant API 启动完成")
-    
+
     yield  # 应用运行期间
-    
+
     # ===== 关闭逻辑 =====
     logger.info("Meeting Assistant API 正在关闭...")
     # 可在此处添加清理逻辑，如关闭数据库连接、释放资源等
@@ -70,7 +61,7 @@ async def lifespan(app: FastAPI):
 
 
 # 创建 FastAPI 应用，传入 lifespan
-app = FastAPI(title="Meeting Assistant API", version="1.0.0", lifespan=lifespan)  # 👈 关键：传入 lifespan
+app = FastAPI(title="Meeting Assistant API", version="1.0.0", lifespan=lifespan)
 
 
 # 读取API配置（从环境变量）
@@ -79,14 +70,18 @@ API_PORT = int(os.getenv("API_PORT", 8000))
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
 # CORS 配置
+"""
 if DEBUG:
     origins = ["*"]  # 开发模式下允许所有来源（包括 file:// 的 null origin）
 else:
     cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3000")
     origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
+"""
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

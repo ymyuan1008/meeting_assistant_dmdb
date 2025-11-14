@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from loguru import logger
 
 # 自定义模块
-from db.databases import get_db
+from db.dm_conn import get_db
 from .auth_service import AuthService
 from .user_service import UserService
 from  models import User, UserRole, UserStatus

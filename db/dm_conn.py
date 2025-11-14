@@ -1,277 +1,228 @@
 # -*- coding: utf-8 -*-
-"""数据库配置模块 - 达梦数据库适配版"""
+"""达梦数据库配置模块"""
 import os
-import logging
-from typing import Generator, Optional
-from contextlib import contextmanager
+from typing import Generator, AsyncIterator
+from contextlib import asynccontextmanager
 
+# 达梦数据库驱动
 import dmPython
-from sqlalchemy import create_engine, event
-from sqlalchemy import text
-from sqlalchemy.engine import Engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    create_async_engine,
+    async_sessionmaker,
+)
 from sqlalchemy.orm import sessionmaker, Session
 from dotenv import load_dotenv
 
-
-# 配置日志
-logger = logging.getLogger(__name__)
 # 加载环境变量
 load_dotenv()
 
-
-class DMDBConfig:
-    """达梦数据库配置类"""
-
-    # 数据库连接配置
-    HOST = os.getenv("DM_HOST", "118.89.93.181")
-    PORT = os.getenv("DM_PORT", "5236")
-    USER = os.getenv("DM_USER", "SYSDBA")
-    PASSWORD = os.getenv("DM_PASSWORD", "Dameng123")
-    DATABASE = os.getenv("DM_DATABASE", "DMDB")
-
-    # 连接池配置
-    POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "10"))
-    MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "5"))
-    POOL_RECYCLE = int(os.getenv("DB_POOL_RECYCLE", "3600"))
-    POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "30"))
-
-    # 其他配置
-    ECHO_SQL = os.getenv("DB_ECHO_SQL", "false").lower() == "true"
-
-    @classmethod
-    def get_sync_url(cls) -> str:
-        """获取同步连接URL"""
-        return (
-            f"dm://{cls.USER}:{cls.PASSWORD}@{cls.HOST}:{cls.PORT}/"
-        )
-
-    @classmethod
-    def validate_config(cls) -> bool:
-        """验证配置是否完整"""
-        required_vars = [cls.HOST, cls.USER, cls.PASSWORD, cls.DATABASE]
-        if not all(required_vars):
-            missing = [var for var in ['DM_HOST', 'DM_USER', 'DM_PASSWORD']
-                       if not os.getenv(var)]
-            logger.warning(f"数据库配置缺失: {missing}")
-            return False
-        return True
-
-
-def setup_connection_pool(engine: Engine) -> None:
-    """设置连接池事件监听"""
-
-    @event.listens_for(engine, "connect")
-    def set_dm_session(dbapi_connection, connection_record):
-        """设置达梦数据库会话参数"""
-        try:
-            # 设置达梦数据库特定的会话参数
-            cursor = dbapi_connection.cursor()
-            # 设置字符集和优化参数
-            cursor.execute("ALTER SESSION SET NLS_LANGUAGE='AMERICAN'")
-            cursor.execute("ALTER SESSION SET NLS_DATE_FORMAT='YYYY-MM-DD HH24:MI:SS'")
-            cursor.close()
-            logger.debug("达梦数据库会话参数设置成功")
-        except Exception as e:
-            logger.warning(f"设置达梦会话参数失败: {e}")
-
-
-def create_dm_engine() -> Optional[Engine]:
-    """创建达梦数据库引擎"""
-    if not DMDBConfig.validate_config():
-        logger.error("数据库配置验证失败")
-        return None
-
-    try:
-        # 构建数据库URL
-        #database_url = DMDBConfig.get_sync_url()
-        DATABASE_URL = "dm://SYSDBA:Dameng123@118.89.93.181:5236"
-
-        sync_engine = create_engine(
-            DATABASE_URL,
-            echo=True,  # 开启 SQL 日志，可能会输出更多连接细节
-            pool_size=10,
-            max_overflow=5,
-            pool_recycle=3600,
-            pool_pre_ping=True
-        )
-        # 设置连接池事件
-        setup_connection_pool(sync_engine)
-
-        # 测试连接
-        with sync_engine.connect() as conn:
-            result = conn.execute(text("select username from dba_users"))
-            print(result.scalar())
-
-        logger.info("达梦数据库引擎创建成功")
-        return sync_engine
-    except Exception as e:
-        print(f"连接失败：{e}")
-
-
-# --------------------------
-# 数据库引擎初始化
-# --------------------------
-sync_engine = create_dm_engine()
-
-# --------------------------
-# 同步会话工厂配置
-# --------------------------
-SyncSessionLocal = sessionmaker(
-    bind=sync_engine,
-    autocommit=False,
-    autoflush=False,
-    class_=Session,
-    expire_on_commit=False  # 避免commit后属性访问问题
-)
-
-# --------------------------
-# 基础模型类
-# --------------------------
+# 基础模型类（所有数据库模型继承此类）
 Base = declarative_base()
 
-# --------------------------
-# 数据库会话管理
-# --------------------------
-@contextmanager
-def get_db() -> Generator[Session, None, None]:
-    """数据库会话上下文管理器
 
-    Usage:
-        with get_db() as db:
-            # 使用db进行数据库操作
-            result = db.query(User).all()
-    """
-    if sync_engine is None:
-        raise RuntimeError("数据库引擎未正确初始化，请检查数据库配置")
+class DMDatabaseConfig(object):
+    """达梦数据库配置类，负责解析环境变量并生成连接URL"""
 
-    db = SyncSessionLocal()
-    try:
-        yield db
-        db.commit()
-        logger.debug("数据库事务提交成功")
-    except Exception as e:
-        db.rollback()
-        logger.error(f"数据库操作失败，已回滚事务: {e}")
-        raise
-    finally:
-        db.close()
+    def __init__(self) -> None:
+        # 从环境变量读取达梦数据库配置，提供默认值
+        self.dm_host = os.getenv("DATABASE_HOST", "118.89.93.181")
+        self.dm_port = os.getenv("DATABASE_PORT", "5236")
+        self.dm_user = os.getenv("DATABASE_USER", "SYSDBA")
+        self.dm_password = os.getenv("DATABASE_PASSWORD", "Dameng123")
+        self.dm_database = os.getenv("DATABASE_NAME", "DMDB")
 
+        # 达梦数据库连接URL格式
+        # 同步连接使用 dmPython 驱动
+        self.sync_url = (
+            f"dm+dmPython://{self.dm_user}:{self.dm_password}"
+            f"@{self.dm_host}:{self.dm_port}"
+        )
 
-def get_db_session() -> Generator[Session, None, None]:
-    """FastAPI依赖注入兼容版本
+        # 异步连接URL（注意：达梦官方对异步支持有限，这里使用兼容格式）
+        self.async_url = (
+            f"dm+dmPython://{self.dm_user}:{self.dm_password}"
+            f"@{self.dm_host}:{self.dm_port}"
+        )
 
-    Usage in FastAPI:
-        @app.get("/users")
-        def get_users(db: Session = Depends(get_db_session)):
-            return db.query(User).all()
-    """
-    if sync_engine is None:
-        raise RuntimeError("数据库引擎未正确初始化")
-
-    db = SyncSessionLocal()
-    try:
-        yield db
-    except Exception as e:
-        logger.error(f"数据库会话异常: {e}")
-        raise
-    finally:
-        db.close()
+    def validate_connection(self) -> bool:
+        """验证达梦数据库连接配置"""
+        try:
+            # 使用dmPython直接测试连接
+            conn = dmPython.connect(
+                user=self.dm_user,
+                password=self.dm_password,
+                server=self.dm_host,
+                port=int(self.dm_port),
+                autoCommit=True
+            )
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"达梦数据库连接测试失败: {e}")
+            return False
 
 
-# --------------------------
-# 数据库工具函数
-# --------------------------
-def init_db() -> None:
-    """初始化数据库表结构"""
-    if sync_engine is None:
-        logger.error("无法初始化数据库：引擎未创建")
-        return
+class DMDatabaseSessionManager(object):
+    """达梦数据库会话管理器，封装同步/异步引擎与会话创建逻辑"""
 
-    try:
-        Base.metadata.create_all(bind=sync_engine)
-        logger.info("数据库表结构初始化成功")
-    except Exception as e:
-        logger.error(f"数据库表结构初始化失败: {e}")
-        raise
+    def __init__(self, config: DMDatabaseConfig) -> None:
+        self.config = config
+
+        # 验证连接配置
+        if not self.config.validate_connection():
+            raise ConnectionError("达梦数据库连接配置验证失败")
+
+        # ========== 同步引擎与会话工厂 ==========
+        self.sync_engine = create_engine(
+            self.config.sync_url,
+            echo=True,  # 开发环境可以设为True查看SQL日志
+            pool_pre_ping=True,  # 连接有效性检查
+            pool_size=10,  # 连接池大小
+            max_overflow=20,  # 最大溢出连接数
+            pool_recycle=3600,  # 连接回收时间(秒)
+            connect_args={
+                'autoCommit': False,  # 手动控制事务
+            }
+        )
+        self.sync_session_factory = sessionmaker(
+            bind=self.sync_engine,
+            autocommit=False,
+            autoflush=False,
+            expire_on_commit=False  # 达梦数据库建议设置
+        )
+
+        # ========== 异步引擎与会话工厂 ==========
+        # 注意：达梦数据库对异步支持有限，这里提供基本实现
+        try:
+            self.async_engine = create_async_engine(
+                self.config.async_url,
+                echo=False,
+                pool_size=5,  # 异步连接池较小
+                max_overflow=10,
+                pool_recycle=3600,
+                pool_pre_ping=True
+            )
+            self.async_session_factory = async_sessionmaker(
+                bind=self.async_engine,
+                autocommit=False,
+                autoflush=False,
+                expire_on_commit=False,
+                class_=AsyncSession
+            )
+        except Exception as e:
+            print(f"达梦异步引擎初始化警告: {e}")
+            print("异步功能可能受限，建议使用同步连接")
+            self.async_engine = None
+            self.async_session_factory = None
+
+    # ------------------------------ 同步会话管理 ------------------------------
+    def get_sync_session(self) -> Generator[Session, None, None]:
+        """同步会话依赖注入生成器（用于非异步路由）"""
+        session = self.sync_session_factory()
+        try:
+            yield session
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
+
+    # ------------------------------ 异步会话管理 ------------------------------
+    @asynccontextmanager
+    async def safe_async_session(self) -> AsyncIterator[AsyncSession]:
+        """安全的异步会话上下文管理器，自动处理提交/回滚/关闭"""
+        if not self.async_session_factory:
+            raise RuntimeError("达梦数据库异步会话未正确初始化")
+
+        session: AsyncSession = self.async_session_factory()
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+    async def get_async_session(self) -> AsyncIterator[AsyncSession]:
+        """异步会话依赖注入生成器（用于异步路由）"""
+        async with self.safe_async_session() as session:
+            yield session
+
+    # ------------------------------ 数据库工具方法 ------------------------------
+    def create_tables(self):
+        """创建所有表结构"""
+        Base.metadata.create_all(bind=self.sync_engine)
+        print("达梦数据库表结构创建完成")
+
+    def drop_tables(self):
+        """删除所有表结构（谨慎使用）"""
+        Base.metadata.drop_all(bind=self.sync_engine)
+        print("达梦数据库表结构删除完成")
+
+    def check_connection(self) -> bool:
+        """检查数据库连接状态"""
+        try:
+            with self.sync_engine.connect() as conn:
+                result = conn.execute(text("SELECT 1 FROM DUAL"))
+                return result.scalar() == 1
+        except Exception as e:
+            print(f"达梦数据库连接检查失败: {e}")
+            return False
+
+    def get_database_info(self) -> dict:
+        """获取数据库连接信息"""
+        return {
+            "host": self.config.dm_host,
+            "port": self.config.dm_port,
+            "user": self.config.dm_user,
+            "database": self.config.dm_database,
+            "status": "connected" if self.check_connection() else "disconnected",
+            "async_support": self.async_engine is not None
+        }
 
 
-def close_db_connection() -> None:
-    """关闭数据库连接池"""
-    global sync_engine
-    if sync_engine:
-        sync_engine.dispose()
-        sync_engine = None
-        logger.info("数据库连接池已关闭")
+# 单例实例化（项目中全局使用一个管理器）
+dm_db_config = DMDatabaseConfig()
+dm_db_manager = DMDatabaseSessionManager(dm_db_config)
 
+# 对外暴露的依赖注入函数（与FastAPI路由配合使用）
+get_db = dm_db_manager.get_sync_session  # 同步会话依赖
+get_async_db = dm_db_manager.get_async_session  # 异步会话依赖
 
-def check_db_health() -> bool:
-    """检查数据库连接健康状态"""
-    if sync_engine is None:
-        logger.error("数据库引擎未初始化")
-        return False
-
-    try:
-        with sync_engine.connect() as conn:
-            result = conn.execute(text("select 1 from dba_users"))
-            health_status = result.scalar() == 1
-            if health_status:
-                logger.debug("数据库健康检查通过")
-            else:
-                logger.warning("数据库健康检查未通过")
-            return health_status
-    except Exception as e:
-        logger.error(f"数据库健康检查失败: {e}")
-        return False
-
-
-def get_db_info() -> dict:
-    """获取数据库连接信息（隐藏密码）"""
-    return {
-        "host": DMDBConfig.HOST,
-        "port": DMDBConfig.PORT,
-        "user": DMDBConfig.USER,
-        "pool_size": DMDBConfig.POOL_SIZE,
-        "status": "connected" if sync_engine else "disconnected"
-    }
-
-
-# --------------------------
-# 应用生命周期管理
-# --------------------------
-@contextmanager
-def database_session():
-    """应用级数据库会话管理"""
-    try:
-        logger.info("初始化数据库连接")
-        if sync_engine is None:
-            raise RuntimeError("数据库连接失败")
-
-        yield sync_engine
-    finally:
-        logger.info("关闭数据库连接")
-        close_db_connection()
-
-
-# --------------------------
-# 模块初始化检查
-# --------------------------
+# 使用示例和测试代码
 if __name__ == "__main__":
-    # 测试数据库连接
     print("=" * 50)
     print("达梦数据库配置测试")
     print("=" * 50)
 
-    print(f"数据库配置: {get_db_info()}")
+    # 显示数据库信息
+    db_info = dm_db_manager.get_database_info()
+    print(f"数据库连接信息: {db_info}")
 
-    if check_db_health():
+    # 测试连接
+    if dm_db_manager.check_connection():
         print("✅ 达梦数据库连接正常")
-        # 初始化表结构（可选）
+
+        # 测试基本查询
         try:
-            init_db()
-            print("✅ 数据库表结构初始化完成")
+            with dm_db_manager.sync_engine.connect() as conn:
+                # 查询达梦数据库版本
+                result = conn.execute(text("SELECT * FROM V$VERSION"))
+                version_info = result.fetchone()
+                print(f"✅ 达梦数据库版本: {version_info[0] if version_info else '未知'}")
+
+                # 查询当前用户
+                result = conn.execute(text("SELECT USER FROM DUAL"))
+                current_user = result.scalar()
+                print(f"✅ 当前数据库用户: {current_user}")
+
         except Exception as e:
-            print(f"❌ 表结构初始化失败: {e}")
+            print(f"❌ 数据库查询测试失败: {e}")
     else:
         print("❌ 达梦数据库连接失败")
 

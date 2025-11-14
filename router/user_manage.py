@@ -10,7 +10,10 @@ from loguru import logger
 from utils.encryption import rsa_encryption
 
 # 自定义模块
-from db.databases import DMSyncConfig, DMSyncManager
+from db.databases import DMDatabaseAdapter
+from db.dm_conn import get_db, get_async_db, Base, dm_db_manager
+from db.dm_conn import DMDatabaseConfig, DMDatabaseSessionManager
+
 from services.user_service import UserService
 from services.auth_service import AuthService
 from services.auth_dependencies import require_auth, require_admin
@@ -25,10 +28,9 @@ user_service = UserService()
 auth_service = AuthService()
 
 # 对外暴露的依赖注入函数
-db_config = DMSyncConfig()
-db_manager = DMSyncManager(db_config)
-get_db = db_manager.get_session_dependency  # 同步会话依赖
-
+dm_db_config = DMDatabaseConfig()
+dm_db_manager = DMDatabaseSessionManager(dm_db_config)
+get_db = dm_db_manager.get_sync_session
 
 # ----------------------------- 辅助方法 -----------------------------
 
@@ -36,7 +38,7 @@ def _resp(data=None, message="success", code=200):
     return {"code": code, "message": message, "data": data}
 
 
-def _raise(status_code: int, message: str, code: str):
+def _raise(status_code: int, message: str, code: int):
     raise HTTPException(status_code=status_code, detail={"code": code, "message": message})
 
 

@@ -21,7 +21,8 @@ from fastapi import APIRouter,HTTPException, Depends
 
 #自定义库
 
-from db.databases import DMSyncConfig, DMSyncManager
+from db.databases import DMDatabaseAdapter
+from db.dm_conn import get_db, get_async_db, Base, dm_db_manager
 from db.conn_manager import ConnectionManager
 
 from services.meeting_service import MeetingService
@@ -85,11 +86,7 @@ db_manager = DatabaseSessionManager(db_config)
 get_db = db_manager.get_sync_session  # 同步会话依赖
 get_async_db = db_manager.get_async_session
 """
-
-db_config = DMSyncConfig()
-db_manager = DMSyncManager(db_config)
-get_db = db_manager.get_session_dependency  # 同步会话依赖
-
+# 对外暴露的依赖注入函数
 
 
 async def handle_file_upload(file: UploadFile, user_id: str) -> Dict[str, Any]:
@@ -390,6 +387,9 @@ async def update_meeting(
     user_id = str(current_user.id)
 
     try:
+        if db.in_transaction():
+            logger.warning("当前会话已存在活跃事务，尝试结束现有事务")
+            db.rollback()  # 若存在未完成事务，先回滚（或根据业务选择commit）
         # 解析会议数据
         meeting_dict = json.loads(meeting_data)
         # 注意：此处根据实际需求使用MeetingUpdate模型（而非创建时的MeetingCreate）

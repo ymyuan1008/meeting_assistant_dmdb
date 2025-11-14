@@ -63,7 +63,7 @@ class MessageService(object):
 
     async def list_messages(
             self,
-            db: AsyncSession,
+            db: Session,
             recipient_id: str,
             only_unread: bool = False,
             page: int = 1,
@@ -92,7 +92,7 @@ class MessageService(object):
             .group_by(MessageRecipient.message_id)
         ).subquery()
         count_q = select(func.count()).select_from(ids_distinct_subq)
-        count_result = await db.execute(count_q)
+        count_result = db.execute(count_q)
         total = int(count_result.scalar() or 0)
 
         # 计算偏移
@@ -104,11 +104,10 @@ class MessageService(object):
             .join(MessageRecipient, MessageRecipient.message_id == Message.id)
             .where(*conditions)
             .group_by(Message.id)
-            .order_by(Message.created_at.desc())
             .offset(offset)
             .limit(page_size)
         )
-        ids_result = await db.execute(ids_q)
+        ids_result =  db.execute(ids_q)
         id_rows = ids_result.all()
         ids = [row[0] for row in id_rows]
 
@@ -120,9 +119,8 @@ class MessageService(object):
             select(Message)
             .where(Message.id.in_(ids))
             .options(selectinload(Message.recipients))
-            .order_by(Message.created_at.desc())
         )
-        data_result = await db.execute(data_q)
+        data_result =  db.execute(data_q)
         messages = data_result.scalars().all()
         return messages, total
 
