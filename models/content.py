@@ -43,7 +43,7 @@ class Transcription(SQLBaseModel):  # 继承SQL基类
 
 
 class TranscriptionText(SQLBaseModel):  # 继承SQL基类
-    __tablename__ = "translation_texts"
+    __tablename__ = "meeting_translations"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     meeting_id = Column(String(100), nullable=False, index=True)

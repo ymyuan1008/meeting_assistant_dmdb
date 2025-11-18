@@ -33,12 +33,12 @@ def _resp(data=None, message: str = "success", code: int = 0) -> dict[str, Any]:
 
 
 @router.post("/send", summary="发送消息", response_model=dict)
-async def send_message(payload: MessageCreate,
+def send_message(payload: MessageCreate,
                        db: Session = Depends(get_db),
                        current_user: User = Depends(require_auth)):
     """发送消息，仅返回操作结果信息"""
     try:
-        msg = await message_service.send_message(
+        msg = message_service.send_message(
             db=db,
             sender_id=str(current_user.id),
             title=payload.title,
@@ -58,7 +58,7 @@ async def send_message(payload: MessageCreate,
     - 将 sender_id 与 recipient_ids 强制转换为 int，匹配 BigInteger 字段
     """
     try:
-        msg = await message_service.send_message(
+        msg = message_service.send_message(
             db=db,
             sender_id=str(current_user.id),
             title=payload.title,
@@ -67,7 +67,7 @@ async def send_message(payload: MessageCreate,
         )
         # 注意：不要直接访问 msg.recipients（异步环境下会触发懒加载导致 MissingGreenlet）
         # 改为通过异步查询显式获取关联的接收者记录
-        rec_rs = await db.execute(
+        rec_rs = db.execute(
             select(MessageRecipient).where(MessageRecipient.message_id == msg.id)
         )
         rec_entities = rec_rs.scalars().all()
@@ -80,7 +80,7 @@ async def send_message(payload: MessageCreate,
         ]
 
         # 同样，避免因模型关系的默认 joined 触发无关的联表查询，按列查询消息内容
-        msg_rs = await db.execute(
+        msg_rs = db.execute(
             select(Message.title, Message.content, Message.sender_id, Message.created_at)
             .where(Message.id == msg.id)
             .limit(1)

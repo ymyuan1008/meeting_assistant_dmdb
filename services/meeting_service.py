@@ -12,6 +12,7 @@ from pathlib import Path
 # 第三方库
 from sqlalchemy.orm import Session
 from sqlalchemy.future import select
+from sqlalchemy.dialects.mysql import VARCHAR
 from sqlalchemy import func, select, case , distinct, literal,cast,String
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
@@ -361,9 +362,7 @@ class MeetingService(object):
 
             ledger_info = []
             for row in ledger_results:
-                # 处理participant_names空值（达梦可能返回空字符串而非None）
-                participant_names = row.participant_names.split(
-                    ',') if row.participant_names and row.participant_names != '' else []
+
                 ledger_info.append({
                     "agenda_id": row.agenda_id,
                     "agenda_name": row.agenda_name,
@@ -378,7 +377,7 @@ class MeetingService(object):
                     "meeting_type": row.meeting_type,
                     "meeting_title": row.title,
                     "host_user": row.host_user,
-                    "participant_user": participant_names,  # 转换为列表
+                    "participant_user": row.participant_names,  # 转换为列表
                     "planned_attendance": row.planned_attendance,
                     "actual_attendance": row.actual_attendance
                 })
@@ -483,7 +482,8 @@ class MeetingService(object):
 
             # 构建基础查询（公共部分）
             query = db.query(
-                cast(Agendas.agenda_id, String).label("agenda_id"),
+                # 1. 数据类型转换：cast 需指定字符串长度（达梦要求）
+                cast(Agendas.agenda_id, VARCHAR(50)).label("agenda_id"),
                 Agendas.agenda_name,
                 User.company,
                 literal("").label("适用治理主体权责清单文件名及文号"),
@@ -497,8 +497,9 @@ class MeetingService(object):
                 literal(0).label("投资类议题金额（万元）"),
                 literal("").label("投资类议题是否开展专项调研"),
                 literal("").label("投资类议题是否开展重大投资项目评价及反馈"),
+                # 2. case 表达式：达梦兼容 MySQL 语法，无需修改
                 case(
-                    (Agendas.is_board_meeting == 1, "是"),  # 去掉外层的[]
+                    (Agendas.is_board_meeting == 1, "是"),  # 核心修改：删除 []
                     else_="否"
                 ).label("is_board_meeting"),
                 literal("").label("议题类型（原一览表要求）"),
@@ -515,7 +516,8 @@ class MeetingService(object):
                 Meeting.title,
                 literal("线上会议").label("meeting_type"),
                 literal("未知").label("host_user"),
-                func.group_concat(PersonSign.name).label('participant_names'),
+                # 3. 聚合函数替换：group_concat → wm_concat（达梦字符串聚合函数）
+                func.wm_concat(PersonSign.name).label('participant_names'),
                 literal("").label("领导参会详情"),
                 literal("").label("领导请假情况"),
                 func.count(distinct(PersonSign.user_code)).label('planned_attendance'),

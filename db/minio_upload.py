@@ -2,10 +2,15 @@ import os
 from datetime import timedelta
 from minio import Minio
 from minio.error import S3Error
+import urllib3
 
 from dotenv import load_dotenv
 load_dotenv()
 
+http_client = urllib3.PoolManager(
+    cert_reqs="CERT_NONE",  # 不验证证书
+    assert_hostname=False  # 不验证主机名（可选，避免主机名与证书不一致报错）
+)
 
 class MinioUploader:
     def __init__(self, endpoint, access_key, secret_key, secure=False):
@@ -13,7 +18,8 @@ class MinioUploader:
             endpoint,
             access_key=access_key,
             secret_key=secret_key,
-            secure=secure
+            secure=secure,
+            http_client=http_client
         )
 
     def create_bucket_if_not_exists(self, bucket_name):
