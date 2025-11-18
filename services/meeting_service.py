@@ -146,7 +146,7 @@ class MeetingService(object):
                 duration_minutes=meeting_data.duration_minutes,
                 status="scheduled",
                 created_by=user_id,
-                created_at=datetime.now(shanghai_tz)
+                created_at=datetime.now()
             )
             db.add(meeting)
             db.flush()  # 获取meeting.id
@@ -180,7 +180,7 @@ class MeetingService(object):
                     email=participant_data.email,
                     user_role=participant_data.user_role,
                     is_required=participant_data.is_required,
-                    created_at=datetime.now(shanghai_tz)
+                    created_at=datetime.now()
                 )
                 db.add(participant)
 
@@ -195,7 +195,7 @@ class MeetingService(object):
                     download_url=attachment_data['download_url'],
                     content_type=attachment_data['content_type'],
                     uploaded_by=attachment_data['uploaded_by'],
-                    uploaded_at=datetime.now(shanghai_tz)
+                    uploaded_at=datetime.now()
                 )
                 db.add(attachment)
 

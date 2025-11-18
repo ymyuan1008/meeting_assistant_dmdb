@@ -263,6 +263,9 @@ async def create_meeting(
     user_id = str(current_user.id)
 
     try:
+        if db.in_transaction():
+            logger.warning("当前会话已存在活跃事务，尝试结束现有事务")
+            db.rollback()  # 若存在未完成事务，先回滚（或根据业务选择commit）
         # 解析会议数据
         meeting_dict = json.loads(meeting_data)
         meeting_create = MeetingCreate(**meeting_dict)
