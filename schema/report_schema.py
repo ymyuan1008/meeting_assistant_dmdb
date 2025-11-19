@@ -15,7 +15,7 @@ class DailyWorkResponse(BaseModel):
     title: str
     agenda: Optional[str] = None
     text_message: Optional[str] = None
-    duration_minutes: Optional[int] = None
+    duration_minutes: Optional[float] = None
     participant_names: List[str] = []
     company_names: List[str] = []
 

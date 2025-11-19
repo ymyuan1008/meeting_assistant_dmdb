@@ -248,7 +248,7 @@ class MeetingService(object):
                 ).join(Participant, Meeting.id == Participant.meeting_id) \
                     .join(User, Participant.user_code == User.id) \
                     .join(Agendas, Agendas.meeting_id == Meeting.id) \
-                    .join(Transcription, Meeting.id == Transcription.meeting_id)
+                    .outerjoin(Transcription, Meeting.id == Transcription.meeting_id)
             else:
                 # 不为空时过滤参与者
                 query = db.query(
@@ -265,7 +265,7 @@ class MeetingService(object):
                 ).join(Participant, Meeting.id == Participant.meeting_id) \
                     .join(User, Participant.user_code == User.id) \
                     .join(Agendas, Agendas.meeting_id == Meeting.id) \
-                    .join(Transcription, Meeting.id == Transcription.meeting_id) \
+                    .outerjoin(Transcription, Meeting.id == Transcription.meeting_id) \
                     .filter(Participant.user_code.in_(participants_list))  # 过滤参与者
 
             # 统一添加 GROUP BY、排序和分页
@@ -418,24 +418,26 @@ class MeetingService(object):
             query = db.query(
                 Meeting.id,
                 Meeting.date_time,
-                func.group_concat(func.distinct(User.company)).label('company_names'),
+                func.listagg(func.distinct(User.company), ',').within_group(User.company).label('company_names'),
                 Meeting.title,
-                func.group_concat(func.distinct(Agendas.agenda_name)).label('agenda'),
-                func.group_concat(func.distinct(Transcription.text_message)).label('text_message'),
-                (Meeting.duration_minutes/60).label('duration_minutes'),
-                func.group_concat(func.distinct(User.name)).label('participant_names')
+                func.listagg(func.distinct(Agendas.agenda_name), ',').within_group(Agendas.agenda_name).label('agenda'),
+                func.listagg(func.distinct(Transcription.text_message), ',').within_group(
+                    Transcription.text_message).label('text_message'),
+                (Meeting.duration_minutes / 60).label('duration_minutes'),
+            func.listagg(func.distinct(User.name), ',').within_group(User.name).label('participant_names')
             ).select_from(Meeting).join(Participant, Meeting.id == Participant.meeting_id) \
                 .join(User, Participant.user_code == User.id) \
                 .join(Agendas, Agendas.meeting_id == Meeting.id) \
-                .join(Transcription, Meeting.id == Transcription.meeting_id).filter(
-                Participant.user_code.in_(participants_list))
+                .outerjoin(Transcription, Meeting.id == Transcription.meeting_id).filter(
+                Participant.user_code.in_(participants_list)
+            )
 
-            # 关键：添加完整的 GROUP BY 子句
+            # GROUP BY 和 ORDER BY 保持不变（达梦支持标准 GROUP BY 语法）
             query = query.group_by(
                 Meeting.id,
-                Meeting.date_time,  # SELECT 中的列
-                Meeting.title,  # SELECT 中的列
-                Meeting.duration_minutes  # SELECT 中的列
+                Meeting.date_time,
+                Meeting.title,
+                Meeting.duration_minutes  # 注意：若duration_minutes是计算字段，需确保在GROUP BY中或用聚合函数
             ).order_by(Meeting.date_time.desc())
 
             # 执行查询
