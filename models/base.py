@@ -5,7 +5,6 @@ import pytz
 from typing import Any
 
 # 第三方库
-from sqlalchemy import Column, DateTime, func
 from sqlalchemy.ext.declarative import declarative_base
 
 # 初始化上海时区

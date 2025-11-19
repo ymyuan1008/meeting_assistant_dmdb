@@ -43,8 +43,10 @@ class PersonSign(BaseModel):
     name = Column(String(50), index=True)
     user_code = Column(String(36), ForeignKey("users.id"), nullable=False)
     meeting_id = Column(String(50), ForeignKey("meetings.id"), nullable=False)
-    is_signed = Column(Integer, default=0)  # 0=未签到，1=已签到
-    is_on_leave = Column(Integer, default=0)  # 0=未请假，1=已请假
+    # 0=未签到，1=已签到
+    is_signed = Column(Integer, default=0)
+    # 0=未请假，1=已请假
+    is_on_leave = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), default=BaseModel.get_shanghai_time, comment="创建时间")
 
     __table_args__ = (

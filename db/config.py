@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     MINIO_SECURE: bool = Field(default=True, description="是否使用HTTPS连接MinIO")
 
     # CORS配置
-    CORS_ORIGINS: List[str] = Field(default=["*"], description="允许的跨域源（用英文逗号分隔多源）")
+    CORS_ORIGINS: list[str] = Field(default=["*"], description="允许的跨域源（用英文逗号分隔多源）")
 
     # SSL证书配置
     CERT_FILE_PATH: str = Field(default="/home/nebula/ssl_certificate.crt", description="SSL证书路径")
@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     # 日志配置
     LOG_LEVEL: str = Field(default="INFO", description="日志级别")
 
-    class Config:
+    class Config(object):
         env_file = ".env"
         env_file_encoding = "utf-8"
 

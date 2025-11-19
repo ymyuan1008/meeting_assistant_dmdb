@@ -1,23 +1,11 @@
 # 标准库
-import base64
-import os
-import json
-from typing import List
-from typing import Generator
-from datetime import datetime
-from pathlib import Path
-from urllib.parse import quote_plus
+
 import pytz
-from loguru import logger
-from httpx import AsyncClient
+
 
 #第三方库
-from fastapi import  WebSocket, WebSocketDisconnect, UploadFile, File
+
 from sqlalchemy.orm import Session
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.asyncio import AsyncSession
-from pydub import AudioSegment
 from fastapi import APIRouter,HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Any
@@ -27,21 +15,12 @@ from services.sign_in_service import SignInService
 from services.document_service import DocumentService
 from services.speech_service import SpeechService
 from services.email_service import EmailService
-
-
-from schema import MeetingCreate, MeetingResponse, TranscriptionCreate, PersonSignResponse,ParticipantCreate
 from db.conn_manager import ConnectionManager
-from db.databases import DMDatabaseAdapter
-from db.dm_conn import get_db, get_async_db, Base, dm_db_manager
-
-from services.auth_dependencies import require_auth, require_admin
-
-from models import User, UserStatus, UserRole
+from db.dm_conn import get_db
+from models import User, UserStatus
 from schema import SignRequest
 
 # 对外暴露的依赖注入函数
-
-
 router = APIRouter()
 # 获取东八区当前时间
 tz = pytz.timezone("Asia/Shanghai")
@@ -68,7 +47,8 @@ def _raise(status_code: int, message: str, code: str):
     raise HTTPException(status_code=status_code, detail={"code": code, "message": message})
 
 class ApiResponse(BaseModel):
-    data: List[Any]  # 明确要求 data 是列表
+    # 明确要求 data 是列表
+    data: List[Any]
     message: str
     code: int
 

@@ -23,7 +23,9 @@ from .attendance_schema import (
 from .content_schema import (
     TranscriptionBase,
     TranscriptionCreate,
+     TranslationTextRequest,
     TranscriptionResponse,
+    TranscriptionTextResponse,
     WebSocketMessage,
     TranslationItem,
     TranslationBatch

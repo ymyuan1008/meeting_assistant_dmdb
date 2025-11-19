@@ -12,7 +12,7 @@ http_client = urllib3.PoolManager(
     assert_hostname=False  # 不验证主机名（可选，避免主机名与证书不一致报错）
 )
 
-class MinioUploader:
+class MinioUploader(object):
     def __init__(self, endpoint, access_key, secret_key, secure=False):
         self.minio_client = Minio(
             endpoint,

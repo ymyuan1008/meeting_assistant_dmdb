@@ -3,7 +3,7 @@ from .base import Base
 from .agenda import Agendas
 from .attachment import Attachment
 from .attendance_check import Participant, PersonSign
-from .content import Transcription, TranscriptionText, TranscriptionTextResponse,TranslationTextRequest
+from .content import Transcription, TranscriptionText
 from .meeting import Meeting
 from .message import Message, MessageRecipient
 from .user import User, UserRole, UserStatus, GenderType
@@ -16,9 +16,7 @@ __all__ = [
     "Participant",
     "PersonSign",
     "Transcription",
-    "TranslationTextRequest",
     "TranscriptionText",
-    "TranscriptionTextResponse",
     "Meeting",
     "Message",
     "MessageRecipient",

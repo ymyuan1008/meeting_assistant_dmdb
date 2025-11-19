@@ -5,22 +5,18 @@ import json
 from typing import Union, Dict, Any, List, Optional
 
 # 第三方库
-from pydantic import BaseModel as PydanticBaseModel  # 重命名Pydantic基类，避免冲突
-from pydantic import Field, validator
 from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Index, Integer, Boolean, func, DateTime
 from sqlalchemy.orm import relationship
 
 # 自定义库：导入SQLAlchemy的数据库基类
 from models.base import BaseModel as SQLBaseModel  # 重命名SQL基类，明确区分
-from schema.content_schema import  TranscriptionTextResponse,TranslationTextRequest
 
 
 
 
-# ------------------------------
+
 # SQLAlchemy数据库模型（映射数据库表）
 # 继承SQLAlchemy的基类
-# ------------------------------
 class Transcription(SQLBaseModel):  # 继承SQL基类
     __tablename__ = "transcriptions"
 

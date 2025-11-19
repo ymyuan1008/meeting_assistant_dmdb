@@ -13,7 +13,7 @@ from db.config import settings
 logger = logging.getLogger(__name__)
 
 
-class DMDatabaseAdapter:
+class DMDatabaseAdapter(object):
     """达梦数据库适配器"""
 
     def __init__(self):
@@ -80,21 +80,23 @@ class DMDatabaseAdapter:
         finally:
             await self._return_connection(connection)
 
-    async def execute_query(self, sql: str, params: Optional[tuple] = None) -> List[Dict[str, Any]]:
+    async def execute_query(self, sql: str, params: Optional[tuple] = None) -> list[dict[str, Any]]:
         """执行查询语句"""
         async with self.get_connection() as conn:
-            cursor = conn.cursor()  # 1. 获取游标需要 await
+            # 1. 获取游标需要 await
+            cursor = conn.cursor()
             try:
                 if params:
-                     cursor.execute(sql, params)  # 2. 执行SQL需要 await
+                    # 2. 执行SQL需要 await
+                    cursor.execute(sql, params)
                 else:
-                    cursor.execute(sql)  # 2. 执行SQL需要 await
+                    cursor.execute(sql)
 
                 # 获取列名（cursor.description 是属性，无需 await）
                 columns = [desc[0] for desc in cursor.description] if cursor.description else []
 
                 # 获取所有结果（fetchall 是异步方法，需要 await）
-                rows = cursor.fetchall()  # 3. 获取结果需要 await
+                rows = cursor.fetchall()
 
                 # 转换为字典列表
                 result = []
@@ -104,7 +106,8 @@ class DMDatabaseAdapter:
                 return result
 
             finally:
-                cursor.close()  # 4. 关闭游标需要 await
+                # 4. 关闭游标需要 await
+                cursor.close()
 
     async def execute_non_query(self, sql: str, params: Optional[tuple] = None) -> int:
         """执行非查询语句（INSERT, UPDATE, DELETE）"""

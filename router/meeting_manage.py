@@ -31,8 +31,8 @@ from services.speech_service import SpeechService
 from services.email_service import EmailService
 from services.auth_dependencies import require_auth
 
-from models  import User,  Attachment, Meeting, TranscriptionText, TranslationTextRequest,TranscriptionTextResponse, Transcription
-from schema  import  MeetingCreate,MeetingUpdate, MeetingResponse, MeetingApiResponse,MeetingListApiResponse,TranscriptionCreate,DailyWorkRequest,DailyWorkApiResponse, LedgerInfoRequest,LedgerApiResponse, DailyWorkResponse, MeetingLedgerResponse
+from models  import User,  Attachment, Meeting, TranscriptionText,  Transcription
+from schema  import  TranslationTextRequest,TranscriptionTextResponse,MeetingCreate,MeetingUpdate, MeetingResponse, MeetingApiResponse,MeetingListApiResponse,TranscriptionCreate,DailyWorkRequest,DailyWorkApiResponse, LedgerInfoRequest,LedgerApiResponse, DailyWorkResponse, MeetingLedgerResponse
 from db.minio_upload import MinioUploader
 
 shanghai_tz = pytz.timezone('Asia/Shanghai')
