@@ -18,7 +18,9 @@ from .attendance_schema import (
     ParticipantUpdate,
     ParticipantResponse,
     PersonSignCreate,
-    PersonSignResponse
+    PersonSignResponse,
+    LeaveResultItem,
+    BatchLeaveResponse
 )
 from .content_schema import (
     TranscriptionBase,
@@ -52,7 +54,8 @@ from .report_schema import (
     DailyWorkApiResponse,
     LedgerInfoRequest,
     MeetingLedgerResponse,
-    LedgerApiResponse
+    LedgerApiResponse,
+    FileApiResponse
 )
 from .user_schema import (
     UserBase,
@@ -85,6 +88,8 @@ __all__ = [
     "ParticipantResponse",
     "PersonSignCreate",
     "PersonSignResponse",
+    "LeaveResultItem",
+    "BatchLeaveResponse",
     # 内容处理相关
     "TranscriptionBase",
     "TranscriptionCreate",
@@ -113,6 +118,7 @@ __all__ = [
     "LedgerInfoRequest",
     "MeetingLedgerResponse",
     "LedgerApiResponse",
+    "FileApiResponse",
     # 用户相关
     "UserBase",
     "UserResponse",

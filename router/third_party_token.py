@@ -38,41 +38,50 @@ async def generate_third_party_token(token: str = Header(..., alias="token")) ->
     请求头格式：token: appId-{appId}#timestamp-{timestamp}#sign-{sign}
     验证通过后返回 Bearer Token
     """
+    # 局部函数：统一错误响应（减少重复return）
+    def error_response(status_code: int, message: str) -> JSONResponse:
+        return JSONResponse(
+            status_code=status_code,
+            content={"code": status_code, "message": message, "data": None}
+        )
 
-    # 解析并验证 token 格式
+    # 1. 解析并验证 token 格式
     pattern = r"appId-(.*?)#timestamp-(\d+)#sign-([a-fA-F0-9]{32})"
     match = re.match(pattern, token)
     if not match:
-        return _error(401, "无效的token格式")
+        return error_response(401, "无效的token格式")
 
     app_id, timestamp_str, sign = match.groups()
 
-    # 验证应用ID
+    # 2. 验证应用ID
     if not APP_ID or app_id != APP_ID:
-        return _error(403, "无效的应用ID")
+        return error_response(403, "无效的应用ID")
 
-    # 验证时间窗口（timestamp 为毫秒）
+    # 3. 验证时间窗口（timestamp 为毫秒）
     try:
         timestamp_ms = int(timestamp_str)
     except ValueError:
-        return _error(401, "无效的时间戳")
+        return error_response(401, "无效的时间戳")
 
     current_ms = int(time.time() * 1000)
     time_diff_sec = abs(current_ms - timestamp_ms) / 1000.0
     if time_diff_sec > TIMESTAMP_VALID_WINDOW:
-        return _error(401, "请求已过期")
+        return error_response(401, "请求已过期")
 
-    # 验证签名
+    # 4. 验证签名
     sign_str = f"{app_id}{APP_SECRET}{timestamp_ms}"
     expected_sign = hashlib.md5(sign_str.encode()).hexdigest()
     if sign.lower() != expected_sign.lower():
-        return _error(401, "无效的签名")
+        return error_response(401, "无效的签名")
 
-    # 生成 JWT 令牌
+    # 5. 验证JWT配置并生成令牌
+    if not JWT_SECRET:
+        return error_response(500, "服务未正确配置JWT密钥")
+
+    # 生成JWT payload
     now = datetime.now(timezone.utc)
     expire = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "sub": app_id,
         "type": "third_party",
         "scope": "api",
@@ -80,12 +89,8 @@ async def generate_third_party_token(token: str = Header(..., alias="token")) ->
         "exp": int(expire.timestamp()),
     }
 
-    if not JWT_SECRET:
-        # 如果未配置密钥，返回配置错误
-        return _error(500, "服务未正确配置JWT密钥")
-
+    # 编码令牌并返回成功响应
     access_token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-
     return JSONResponse(status_code=200, content={
         "code": 200,
         "message": "成功",

@@ -17,8 +17,8 @@ from services.speech_service import SpeechService
 from services.email_service import EmailService
 from db.conn_manager import ConnectionManager
 from db.dm_conn import get_db
-from models import User, UserStatus
-from schema import SignRequest
+from models import User
+from schema import SignRequest,LeaveResultItem,BatchLeaveResponse
 
 # 对外暴露的依赖注入函数
 router = APIRouter()
@@ -127,148 +127,86 @@ async def sign(
 
 @router.post("/leave")
 async def leave(
-        request: SignRequest,
-        db: Session = Depends(get_db)
-):
-    """
-    人员批量请假接口（绑定会议维度）
-    """
+    request: SignRequest,
+    db: Session = Depends(get_db)
+) -> BatchLeaveResponse:  # 明确返回类型
+    """人员批量请假接口（绑定会议维度）"""
     current_users_id = request.current_users_id
     meeting_id = request.meeting_id
+
+    # 前置校验：用户ID列表不能为空
     if not current_users_id:
         raise HTTPException(status_code=400, detail="用户ID列表不能为空")
 
-    results = []
-    errors = []
+    results: List[LeaveResultItem] = []  # 类型注解：明确为LeaveResultItem列表
+    errors: List[str] = []
 
     for user_id in current_users_id:
+        # 初始化当前用户的结果（默认失败状态，后续覆盖）
+        current_result = LeaveResultItem(
+            user_id=user_id,
+            status="failed",
+            error="未知错误"
+        )
+        user = None  # 提前定义，避免作用域问题
+
         try:
-            # 查询用户
+            # 1. 查询用户
             user = db.query(User).filter(User.id == user_id).first()
             if not user:
-                errors.append(f"用户ID {user_id} 不存在")
-                results.append({
-                    "user_id": user_id,
-                    "status": "failed",
-                    "error": "用户不存在"
-                })
+                err_msg = "用户不存在"
+                current_result.error = err_msg
+                errors.append(f"用户ID {user_id} {err_msg}")
+                results.append(current_result)
                 continue
 
-            # 调用服务层请假方法
-            result = await attendance_service.leave_person(
+            # 2. 补充用户名（用户存在时）
+            current_result.user_name = user.name
+
+            # 3. 调用服务层请假方法
+            leave_data = await attendance_service.leave_person(
                 db=db,
                 name=user.name,
                 meeting_id=meeting_id,
                 user_id=str(user_id)
             )
-            results.append({
-                "user_id": user_id,
-                "user_name": user.name,
-                "status": "success",
-                "data": result
-            })
+
+            # 4. 成功状态更新
+            current_result.status = "success"
+            current_result.data = leave_data
+            current_result.error = None  # 清空错误信息
+            results.append(current_result)
 
         except HTTPException as e:
-            # 捕获服务层抛出的已知异常（如会议/人员不存在）
+            # 捕获已知业务异常（如会议不存在）
+            current_result.error = e.detail
             errors.append(f"用户ID {user_id} 请假失败: {e.detail}")
-            results.append({
-                "user_id": user_id,
-                "user_name": user.name if user else None,
-                "status": "failed",
-                "error": e.detail
-            })
+            results.append(current_result)
         except Exception as e:
-            # 捕获其他未知异常
+            # 捕获未知异常（标记为error状态）
+            err_msg = f"请假操作失败: {str(e)}"
+            current_result.status = "error"
+            current_result.error = err_msg
             errors.append(f"用户ID {user_id} 请假异常: {str(e)}")
-            results.append({
-                "user_id": user_id,
-                "user_name": user.name if user else None,
-                "status": "error",
-                "error": f"请假操作失败: {str(e)}"
-            })
+            results.append(current_result)
 
-    # 返回批量操作结果
-    return {
-        "meeting_id": meeting_id,
-        "total_count": len(current_users_id),
-        "success_count": len([r for r in results if r["status"] == "success"]),
-        "failed_count": len([r for r in results if r["status"] == "failed"]),
-        "error_count": len([r for r in results if r["status"] == "error"]),
-        "results": results,
-        "errors": errors if errors else None
-    }
+    # 计算各状态数量（使用生成器表达式优化性能）
+    success_count = sum(1 for r in results if r.status == "success")
+    failed_count = sum(1 for r in results if r.status == "failed")
+    error_count = sum(1 for r in results if r.status == "error")
+
+    # 返回标准化响应（自动校验字段类型）
+    return BatchLeaveResponse(
+        meeting_id=meeting_id,
+        total_count=len(current_users_id),
+        success_count=success_count,
+        failed_count=failed_count,
+        error_count=error_count,
+        results=results,
+        errors=errors if errors else None
+    )
 
 
-async def leave(
-        meeting_id: str,
-        current_users_id: list[str],  # 改为列表参数
-        db: Session = Depends(get_db)
-):
-    """
-    人员批量请假接口（绑定会议维度）
-    """
-    if not current_users_id:
-        raise HTTPException(status_code=400, detail="用户ID列表不能为空")
-
-    results = []
-    errors = []
-
-    for user_id in current_users_id:
-        try:
-            # 查询用户
-            user = db.query(User).filter(User.id == user_id).first()
-            if not user:
-                errors.append(f"用户ID {user_id} 不存在")
-                results.append({
-                    "user_id": user_id,
-                    "status": "failed",
-                    "error": "用户不存在"
-                })
-                continue
-
-            # 调用服务层请假方法
-            result = await attendance_service.leave_person(
-                db=db,
-                name=user.name,
-                meeting_id=meeting_id,
-                user_id=str(user_id)
-            )
-            results.append({
-                "user_id": user_id,
-                "user_name": user.name,
-                "status": "success",
-                "data": result
-            })
-
-        except HTTPException as e:
-            # 捕获服务层抛出的已知异常（如会议/人员不存在）
-            errors.append(f"用户ID {user_id} 请假失败: {e.detail}")
-            results.append({
-                "user_id": user_id,
-                "user_name": user.name if user else None,
-                "status": "failed",
-                "error": e.detail
-            })
-        except Exception as e:
-            # 捕获其他未知异常
-            errors.append(f"用户ID {user_id} 请假异常: {str(e)}")
-            results.append({
-                "user_id": user_id,
-                "user_name": user.name if user else None,
-                "status": "error",
-                "error": f"请假操作失败: {str(e)}"
-            })
-
-    # 返回批量操作结果
-    return {
-        "meeting_id": meeting_id,
-        "total_count": len(current_users_id),
-        "success_count": len([r for r in results if r["status"] == "success"]),
-        "failed_count": len([r for r in results if r["status"] == "failed"]),
-        "error_count": len([r for r in results if r["status"] == "error"]),
-        "results": results,
-        "errors": errors if errors else None
-    }
 @router.post("/close")
 async def close_sign(
     meeting_id: str,

@@ -5,13 +5,13 @@ import uuid
 
 import pytz
 import ssl
+import traceback
 
 from typing import List, Generator
 from typing import Any, Dict,Optional
-from datetime import datetime, timezone
-
+from datetime import datetime
 from loguru import logger
-from pathlib import Path
+
 
 #第三方库
 from sqlalchemy.orm import Session
@@ -21,8 +21,7 @@ from fastapi import APIRouter,HTTPException, Depends
 
 #自定义库
 
-from db.databases import DMDatabaseAdapter
-from db.dm_conn import get_db, get_async_db, Base, dm_db_manager
+from db.dm_conn import get_db
 from db.conn_manager import ConnectionManager
 
 from services.meeting_service import MeetingService
@@ -32,10 +31,22 @@ from services.email_service import EmailService
 from services.auth_dependencies import require_auth
 
 from models  import User,  Attachment, Meeting, TranscriptionText,  Transcription
-from schema  import  TranslationTextRequest,TranscriptionTextResponse,MeetingCreate,MeetingUpdate, MeetingResponse, MeetingApiResponse,MeetingListApiResponse,TranscriptionCreate,DailyWorkRequest,DailyWorkApiResponse, LedgerInfoRequest,LedgerApiResponse, DailyWorkResponse, MeetingLedgerResponse
+from schema  import  TranslationTextRequest,MeetingCreate,MeetingUpdate, MeetingResponse
+from schema  import  MeetingApiResponse,MeetingListApiResponse,DailyWorkRequest,DailyWorkApiResponse
+from schema  import  FileApiResponse,LedgerInfoRequest,LedgerApiResponse
 from db.minio_upload import MinioUploader
 
-shanghai_tz = pytz.timezone('Asia/Shanghai')
+# 全局常量定义
+MINIO_UPLOAD_FAILED = "MinIO 上传失败，返回本地文件路径。"
+MEETING_DATA_JSON_FORMAT_ERROR = "会议数据格式错误，必须是有效的JSON"
+MEETING_DATA_PARAM_DESCRIPTION = "会议数据(JSON字符串)"
+RESPONSE_SUCCESS_MESSAGE = "request success"
+INVALID_USER_ID_ERROR = "Invalid user ID"
+INTERNAL_SERVER_ERROR = "Internal server error"
+DOWNLOAD_SUCCESS_MESSAGE = "download success"
+SHANGHAI_TIMEZONE = "Asia/Shanghai"
+
+
 
 # 创建不验证证书的 SSL 上下文
 ssl_context = ssl.create_default_context()
@@ -44,8 +55,9 @@ ssl_context.verify_mode = ssl.CERT_NONE  # 不验证证书
 
 router = APIRouter(prefix="/api/meetings", tags=["Mettings"])
 # 获取东八区当前时间
-tz = pytz.timezone("Asia/Shanghai")
+tz = pytz.timezone(SHANGHAI_TIMEZONE)
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
 
 
 def _init_minio_uploader() -> Optional[MinioUploader]:
@@ -79,17 +91,9 @@ manager = ConnectionManager()
 
 MEETING_NOT_FOUND_DETAIL = "Meeting not found"
 
-# 对外暴露的依赖注入函数
-"""
-db_config = DatabaseConfig()
-db_manager = DatabaseSessionManager(db_config)
-get_db = db_manager.get_sync_session  # 同步会话依赖
-get_async_db = db_manager.get_async_session
-"""
-# 对外暴露的依赖注入函数
 
 
-async def handle_file_upload(file: UploadFile, user_id: str) -> Dict[str, Any]:
+async def handle_file_upload(file: UploadFile, user_id: str) -> dict[str, Any]:
     """处理单个文件上传
 
     Args:
@@ -156,7 +160,7 @@ async def handle_file_upload(file: UploadFile, user_id: str) -> Dict[str, Any]:
                 print(f"预签名 URL: {presigned_url}")
 
             else:
-                logger.warning("MinIO 上传失败，返回本地文件路径。")
+                logger.warning(MINIO_UPLOAD_FAILED)
         except Exception as e:
             logger.error(f"MinIO 上传异常，返回本地文件路径。错误: {e}")
 
@@ -176,7 +180,7 @@ async def handle_file_upload(file: UploadFile, user_id: str) -> Dict[str, Any]:
         logger.error(f"文件上传失败: {str(e)}")
         raise HTTPException(status_code=500, detail="文件上传失败")
 
-def validate_field(value: Any, field_name: str) -> None:
+def validate_field(value: int| str, field_name: str) -> None:
     """验证必填字段是否为空"""
     if not value:
         raise HTTPException(
@@ -196,19 +200,19 @@ async def get_meetings(current_user: User = Depends(require_auth),
     try:
         # 验证 current_user_id 是否合法
         if not user_id:
-            raise HTTPException(status_code=400, detail="Invalid user ID")
+            raise HTTPException(status_code=400, detail=INVALID_USER_ID_ERROR)
 
         # 获取会议列表
         meetings = await meeting_service.get_meetings(db, user_id)
 
         # 记录成功日志
         logger.info(f"Successfully retrieved meetings for user: {user_id}")
-        return {"data": meetings, "code": 200, "message": "request success"}
+        return {"data": meetings, "code": 200, "message": RESPONSE_SUCCESS_MESSAGE}
 
     except Exception as e:
         # 记录错误日志
         logger.error(f"Failed to retrieve meetings for user: {user_id}, error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR)
 
 @router.get("/{meeting_id}/user/", summary="获取单一会议信息", response_model=MeetingApiResponse)
 async def get_meeting(meeting_id: str,
@@ -219,7 +223,7 @@ async def get_meeting(meeting_id: str,
     try:
         # 验证 user_id 是否合法
         if not user_id:
-            raise HTTPException(status_code=400, detail="Invalid user ID")
+            raise HTTPException(status_code=400, detail=INVALID_USER_ID_ERROR)
 
         # 验证 meeting_id 是否合法
         if not meeting_id or not isinstance(meeting_id, str):
@@ -232,20 +236,20 @@ async def get_meeting(meeting_id: str,
 
         # 记录成功日志
         logger.info(f"Successfully retrieved meeting {meeting_id} for user: {user_id}")
-        return {"data": meeting, "code": 200, "message": "request success"}
+        return {"data": meeting, "code": 200, "message": RESPONSE_SUCCESS_MESSAGE}
 
     except HTTPException:
         raise
     except Exception as e:
         # 记录错误日志
         logger.error(f"Failed to retrieve meeting {meeting_id} for user: {user_id}, error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR)
 
 # Meeting management endpoints
 @router.post("/", summary="创建新会议", response_model=MeetingApiResponse)
 async def create_meeting(
-        meeting_data: str = Form(..., description="会议数据（JSON字符串）"),
-        files: List[UploadFile] = File([], description="会议附件（可选）"),
+        meeting_data: str = Form(..., description=MEETING_DATA_PARAM_DESCRIPTION),
+        files: list[UploadFile] = File([], description="会议附件（可选）"),
         current_user: User = Depends(require_auth),
         db: Session = Depends(get_db)
 ) -> MeetingApiResponse:
@@ -296,7 +300,7 @@ async def create_meeting(
         logger.warning(f"JSON解析错误: {str(e)}")
         raise HTTPException(
             status_code=400,
-            detail="会议数据格式错误，必须是有效的JSON"
+            detail=MEETING_DATA_JSON_FORMAT_ERROR
         )
     except ValueError as e:
         db.rollback()
@@ -309,8 +313,8 @@ async def create_meeting(
 
 @router.post("/batch_create", summary="批量创建新会议")
 async def create_meetings_batch(
-        meeting_data: str = Form(..., description="会议数据（JSON字符串）"),
-        files: List[UploadFile] = File([], description="会议附件（可选）"),
+        meeting_data: str = Form(..., description=MEETING_DATA_PARAM_DESCRIPTION),
+        files: list[UploadFile] = File([], description="会议附件（可选）"),
         current_user: User = Depends(require_auth),
         db: Session = Depends(get_db)
 ):
@@ -358,7 +362,7 @@ async def create_meetings_batch(
         logger.warning(f"JSON解析错误: {str(e)}")
         raise HTTPException(
             status_code=400,
-            detail="会议数据格式错误，必须是有效的JSON"
+            detail=MEETING_DATA_JSON_FORMAT_ERROR
         )
     except ValueError as e:
         db.rollback()
@@ -372,7 +376,7 @@ async def create_meetings_batch(
 @router.put("/{meeting_id}/user/", summary="更新会议信息", response_model=MeetingApiResponse)
 async def update_meeting(
         meeting_id: str,
-        meeting_data: str = Form(..., description="会议数据（JSON字符串）"),
+        meeting_data: str = Form(..., description=MEETING_DATA_PARAM_DESCRIPTION),
         current_user: User = Depends(require_auth),
         db: Session = Depends(get_db)
 ) -> MeetingApiResponse:
@@ -418,7 +422,7 @@ async def update_meeting(
         logger.warning(f"JSON解析错误: {str(e)}")
         raise HTTPException(
             status_code=400,
-            detail="会议数据格式错误，必须是有效的JSON"
+            detail=MEETING_DATA_JSON_FORMAT_ERROR
         )
     except ValueError as e:
         db.rollback()
@@ -426,14 +430,13 @@ async def update_meeting(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         db.rollback()
-        logger.error(f"更新会议失败: {str(e)}")
+        logger.error(f"更新会议失败: 异常类型={type(e)}, 异常信息={str(e)}, 异常堆栈={traceback.format_exc()}")
         raise HTTPException(status_code=500, detail="服务器内部错误，更新会议失败")
-
 
 @router.post("/{meeting_id}/attachments", summary="为会议添加附件")
 async def add_attachment(
         meeting_id: str,
-        files: List[UploadFile] = File(..., description="上传的文件列表"),
+        files: list[UploadFile] = File(..., description="上传的文件列表"),
         current_user: User = Depends(require_auth),
         db: Session = Depends(get_db)
 ):
@@ -458,8 +461,8 @@ async def add_attachment(
         )
 
     user_id = current_user.id
-    attachments_data: List[Dict[str, Any]] = []
-    attachment_instances: List[Attachment] = []
+    attachments_data: list[dict[str, Any]] = []
+    attachment_instances: list[Attachment] = []
 
     try:
         # 3. 处理文件上传并创建附件实例
@@ -484,7 +487,7 @@ async def add_attachment(
                 download_url=file_info['download_url'],
                 content_type=file_info['content_type'],
                 uploaded_by=user_id,  # 直接使用当前用户ID，避免依赖上传工具返回
-                uploaded_at=datetime.now(shanghai_tz)
+                uploaded_at=datetime.now()
             )
 
             attachments_data.append(file_info)
@@ -509,7 +512,6 @@ async def add_attachment(
         # 发生异常时回滚事务
         db.rollback()
         # 记录错误日志（建议使用logger）
-        # logger.error(f"附件上传失败: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"附件上传失败：{str(e)}"
@@ -521,7 +523,7 @@ async def delete_attachment(meeting_id: str,
                             attachment_id: str,
                             current_user: User = Depends(require_auth),
                             db: Session = Depends(get_db)
-                            ):
+                            ) -> dict[str:str]:
     """
     删除指定的会议附件
     """
@@ -631,7 +633,7 @@ async def translate_text_load(request: TranslationTextRequest, db: Session = Dep
             other_meeting_id=other_meeting_id,
             speaker_name=json.dumps(request.extract_conversation_data()['speakers'], ensure_ascii=False),
             text_message=json.dumps(request.translateText, ensure_ascii=False),
-            created_time=datetime.now(pytz.timezone('Asia/Shanghai'))
+            created_time=datetime.now(pytz.timezone())
         )
         # 添加到数据库
         db.add(translation_record)
@@ -648,7 +650,7 @@ async def translate_text_load(request: TranslationTextRequest, db: Session = Dep
             meeting_id=meeting_id,
             speaker_name=json.dumps(request.extract_conversation_data()['speakers'], ensure_ascii=False),
             text_message=combined_text,
-            created_time=datetime.now(pytz.timezone('Asia/Shanghai'))
+            created_time=datetime.now(pytz.timezone())
         )
         # 添加到数据库
         db.add(video_translation_text)
@@ -692,24 +694,24 @@ async def get_daily_info(request: DailyWorkRequest,
     try:
         # 验证 current_user_id 是否合法
         if not user_id:
-            raise HTTPException(status_code=400, detail="Invalid user ID")
+            raise HTTPException(status_code=400, detail=INVALID_USER_ID_ERROR)
 
         # 获取会议列表
         meetings = await meeting_service.get_daily_work(db,user_id,participants_list)
 
         # 记录成功日志
         logger.info(f"Successfully retrieved meetings for user: {user_id}")
-        return {"data": meetings, "code": 200, "message": "request success"}
+        return {"data": meetings, "code": 200, "message": RESPONSE_SUCCESS_MESSAGE}
 
     except Exception as e:
         # 记录错误日志
         logger.error(f"Failed to retrieve meetings for user: {user_id}, error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR)
 
 @router.post("/daily_work_export/", summary="导出工作日志")
 async def export_daily_info(request: DailyWorkRequest,
                     current_user: User = Depends(require_auth),
-                    db: Session = Depends(get_db)):
+                    db: Session = Depends(get_db))->FileApiResponse:
     """获取全部会议信息"""
     user_id = str(current_user.id)
     participants_list = request.participants_code
@@ -717,7 +719,7 @@ async def export_daily_info(request: DailyWorkRequest,
     try:
         # 验证 current_user_id 是否合法
         if not user_id:
-            raise HTTPException(status_code=400, detail="Invalid user ID")
+            raise HTTPException(status_code=400, detail=INVALID_USER_ID_ERROR)
 
         # 获取履职日志信息
         file_info = await meeting_service.export_daily_work(db, user_id, participants_list, meeting_ids)
@@ -731,28 +733,27 @@ async def export_daily_info(request: DailyWorkRequest,
             if minio_path and presigned_url:
                 print(f"文件已上传，MinIO 路径: {minio_path}")
                 print(f"预签名 URL: {presigned_url}")
-
             else:
-                logger.warning("MinIO 上传失败，返回本地文件路径。")
+                logger.warning(MINIO_UPLOAD_FAILED)
         except Exception as e:
             logger.error(f"MinIO 上传异常，返回本地文件路径。错误: {e}")
         down_file_info = {"download_url": presigned_url}
-        return {"data": down_file_info , "code": 200, "message": "download success"}
+        return {"data": down_file_info , "code": 200, "message": DOWNLOAD_SUCCESS_MESSAGE}
 
     except Exception as e:
         # 记录错误日志
         logger.error(f"Failed to retrieve meetings for user: {user_id}, error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR)
 
 @router.post("/daily_work_template/", summary="履职工作日志下载模板")
 async def daily_work_template(current_user: User = Depends(require_auth),
-                              db: Session = Depends(get_db)):
+                              db: Session = Depends(get_db)) ->FileApiResponse:
     """获取全部会议信息"""
     user_id = str(current_user.id)
     try:
         # 验证 current_user_id 是否合法
         if not user_id:
-            raise HTTPException(status_code=400, detail="Invalid user ID")
+            raise HTTPException(status_code=400, detail=INVALID_USER_ID_ERROR)
 
         # 获取履职日志信息
         file_name = "履职工作日志模板.xlsx"
@@ -771,17 +772,17 @@ async def daily_work_template(current_user: User = Depends(require_auth),
                 print(f"预签名 URL: {presigned_url}")
 
             else:
-                logger.warning("MinIO 上传失败，返回本地文件路径。")
+                logger.warning(MINIO_UPLOAD_FAILED)
         except Exception as e:
             logger.error(f"MinIO 上传异常，返回本地文件路径。错误: {e}")
 
         down_file_info = {"download_url": presigned_url}
-        return {"data": down_file_info, "code": 200, "message": "download success"}
+        return {"data": down_file_info, "code": 200, "message": DOWNLOAD_SUCCESS_MESSAGE}
 
     except Exception as e:
         # 记录错误日志
         logger.error(f"Failed to retrieve meetings for user: {user_id}, error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR)
 
 @router.post("/ledger_info_query/", summary="查询台账信息")
 async def get_ledger_info(current_user: User = Depends(require_auth),
@@ -792,32 +793,32 @@ async def get_ledger_info(current_user: User = Depends(require_auth),
     try:
         # 验证 current_user_id 是否合法
         if not user_id:
-            raise HTTPException(status_code=400, detail="Invalid user ID")
+            raise HTTPException(status_code=400, detail=INVALID_USER_ID_ERROR)
 
         # 获取会议列表
         meetings = await meeting_service.get_ledger_info(db,user_id)
 
         # 记录成功日志
         logger.info(f"Successfully retrieved meetings for user: {user_id}")
-        return {"data": meetings, "code": 200, "message": "request success"}
+        return {"data": meetings, "code": 200, "message": RESPONSE_SUCCESS_MESSAGE}
 
     except Exception as e:
         # 记录错误日志
         logger.error(f"Failed to retrieve meetings for user: {user_id}, error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR)
 
 
 @router.post("/ledger_info_export/", summary="导出台账信息")
 async def export_ledger_info(request: LedgerInfoRequest,
                     current_user: User = Depends(require_auth),
-                    db: Session = Depends(get_db)):
+                    db: Session = Depends(get_db))->FileApiResponse:
     """获取全部会议信息"""
     user_id = str(current_user.id)
     agenda_ids = request.agenda_id
     try:
         # 验证 current_user_id 是否合法
         if not user_id:
-            raise HTTPException(status_code=400, detail="Invalid user ID")
+            raise HTTPException(status_code=400, detail=INVALID_USER_ID_ERROR)
 
         # 获取履职日志信息
         file_info = await meeting_service.export_ledger_info(db, user_id, agenda_ids)
@@ -831,29 +832,28 @@ async def export_ledger_info(request: LedgerInfoRequest,
             if minio_path and presigned_url:
                 print(f"文件已上传，MinIO 路径: {minio_path}")
                 print(f"预签名 URL: {presigned_url}")
-
             else:
-                logger.warning("MinIO 上传失败，返回本地文件路径。")
+                logger.warning(MINIO_UPLOAD_FAILED)
         except Exception as e:
             logger.error(f"MinIO 上传异常，返回本地文件路径。错误: {e}")
 
         down_file_info = {"download_url": presigned_url}
-        return {"data": down_file_info, "code": 200, "message": "download success"}
+        return {"data": down_file_info, "code": 200, "message": DOWNLOAD_SUCCESS_MESSAGE}
 
     except Exception as e:
         # 记录错误日志
         logger.error(f"Failed to retrieve meetings for user: {user_id}, error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR)
 
 @router.post("/ledger_manage_template/", summary="导出台账管理下载模板")
 async def ledger_manage_template(current_user: User = Depends(require_auth),
-                    db: Session = Depends(get_db)):
+                    db: Session = Depends(get_db))->FileApiResponse:
     """获取全部会议信息"""
     user_id = str(current_user.id)
     try:
         # 验证 current_user_id 是否合法
         if not user_id:
-            raise HTTPException(status_code=400, detail="Invalid user ID")
+            raise HTTPException(status_code=400, detail=INVALID_USER_ID_ERROR)
 
         # 获取履职日志信息
         file_name = "台账登记模板.xlsx"
@@ -876,12 +876,12 @@ async def ledger_manage_template(current_user: User = Depends(require_auth),
         except Exception as e:
             logger.error(f"MinIO 上传异常，返回本地文件路径。错误: {e}")
         down_file_info = {"download_url": presigned_url}
-        return {"data": down_file_info, "code": 200, "message": "download success"}
+        return {"data": down_file_info, "code": 200, "message": DOWNLOAD_SUCCESS_MESSAGE}
 
     except Exception as e:
         # 记录错误日志
         logger.error(f"Failed to retrieve meetings for user: {user_id}, error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR)
 
 
 

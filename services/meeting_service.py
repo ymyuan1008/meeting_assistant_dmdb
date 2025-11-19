@@ -709,7 +709,8 @@ class MeetingService(object):
                     email=participant_data.email,
                     user_role=participant_data.user_role,
                     is_required=participant_data.is_required,
-                    created_at=datetime.now(shanghai_tz)
+                    attendance_status=participant_data.attendance_status,
+                    created_at=datetime.now()
                 )
                 db.add(participant)
 
@@ -726,7 +727,9 @@ class MeetingService(object):
                     topic_type2=agenda_data.topic_type2,
                     topic_type3=agenda_data.topic_type3,
                     is_escalation=agenda_data.is_escalation,
-                    created_by=agenda_data.created_by  # 添加创建人字段
+                    created_by=agenda_data.created_by,
+                    create_time=datetime.now(),  # 新增：设置创建时间
+                    update_time=datetime.now()
                 )
                 db.add(db_agenda)
 

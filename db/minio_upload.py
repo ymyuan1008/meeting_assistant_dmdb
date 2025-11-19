@@ -62,7 +62,7 @@ if __name__ == "__main__":
         secure=os.getenv('MINIO_SECURE', 'False').lower() == 'true'
     )
 
-    console_address = "118.89.93.181:9001"
+    console_address = os.getenv('MINIO_CONSOLE_ADDRESS')
     bucket_name = "meeting-minutes"
     csv_file_path = 'alarm_records.csv'
     object_name = 'alarm_records.csv'

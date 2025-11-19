@@ -10,19 +10,19 @@ async def get_third_party_token(
     app_id: Optional[str] = Query(None, description="第三方服务的应用ID"),
     app_secret: Optional[str] = Query(None, description="第三方服务的应用密钥"),
     _ = Depends(require_auth)
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     请求第三方接口获取最新访问令牌
-    
+
     Args:
         base_url: 第三方服务的基础URL
         app_id: 第三方服务的应用ID
         app_secret: 第三方服务的应用密钥
-        
+
     Returns:
         包含token信息的响应
     """
     result = await third_party_token_service.get_third_party_token(base_url, app_id, app_secret)
-    
+
     # 直接返回第三方服务的结果，格式已符合要求
     return result

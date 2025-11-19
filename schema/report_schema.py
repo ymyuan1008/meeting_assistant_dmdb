@@ -63,3 +63,13 @@ class LedgerApiResponse(BaseModel):
     data: list[MeetingLedgerResponse]
     code: int
     message: str
+
+
+class DownloadFileInfo(BaseModel):
+    download_url: Optional[str]  # 可能为None（如MinIO上传失败时）
+
+# 统一API响应模型
+class FileApiResponse(BaseModel):
+    data: DownloadFileInfo
+    code: int
+    message: str

@@ -29,6 +29,7 @@ class MeetingUpdate(BaseModel):
     date_time: datetime
     location: Optional[str] = None
     duration_minutes: Optional[int] = None
+    attendance_status: Optional[str] = 'pending'
     agendas: List[MeetingAgendaUpdate] = []
     participants: List["ParticipantUpdate"]
     attachments: Optional[List["AttachmentUpdate"]] = None
