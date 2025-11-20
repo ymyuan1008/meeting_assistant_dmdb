@@ -7,8 +7,9 @@ import asyncio
 from typing import Dict, List, Any, Optional
 from contextlib import asynccontextmanager
 import logging
+import os
 
-from db.config import settings
+
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +27,10 @@ class DMDatabaseAdapter(object):
         """创建达梦数据库连接"""
         try:
             connection = dmPython.connect(
-                server=settings.DATABASE_HOST,
-                port=settings.DATABASE_PORT,
-                user=settings.DATABASE_USER,
-                password=settings.DATABASE_PASSWORD,
+                server=os.getenv("DATABASE_HOST", "localhost"),
+                port=os.getenv("DATABASE_PORT", "5236"),
+                user=os.getenv("DATABASE_USER", "SYSDBA"),
+                password=os.getenv("DATABASE_PASSWORD", "Dameng123"),
                 autoCommit=False
             )
             logger.info("达梦数据库连接创建成功")

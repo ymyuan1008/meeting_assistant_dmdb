@@ -28,7 +28,7 @@ class DMDatabaseConfig(object):
 
     def __init__(self) -> None:
         # 从环境变量读取达梦数据库配置，提供默认值
-        self.dm_host = os.getenv("DATABASE_HOST", "118.89.93.181")
+        self.dm_host = os.getenv("DATABASE_HOST", "localhost")
         self.dm_port = os.getenv("DATABASE_PORT", "5236")
         self.dm_user = os.getenv("DATABASE_USER", "SYSDBA")
         self.dm_password = os.getenv("DATABASE_PASSWORD", "Dameng123")

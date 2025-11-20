@@ -523,7 +523,7 @@ async def delete_attachment(meeting_id: str,
                             attachment_id: str,
                             current_user: User = Depends(require_auth),
                             db: Session = Depends(get_db)
-                            ) -> dict[str:str]:
+                            ) -> dict[str, Any]:
     """
     删除指定的会议附件
     """
