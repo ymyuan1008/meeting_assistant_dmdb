@@ -13,8 +13,11 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 from sqlalchemy.future import select
 from sqlalchemy.dialects.mysql import VARCHAR
-from sqlalchemy import func, select, case , distinct, literal,cast,String
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from sqlalchemy import func, select, case, distinct
+from sqlalchemy import literal, cast, String, text
+
 from fastapi import HTTPException
 from fastapi import UploadFile
 
@@ -572,6 +575,25 @@ class MeetingService(object):
 
         except Exception as e:
             logger.error(f"Failed to retrieve meetings for user: {current_user_id}, error: {str(e)}")
+            raise
+
+    async def modify_meeting_status(self, db: Session, meeting_id: str, status: str) -> bool:
+        """更新会议状态"""
+        try:
+            # 构建更新SQL
+            sql = text(f"UPDATE meetings SET STATUS='{status}' WHERE id='{meeting_id}'")
+            result = db.execute(sql)
+
+            if result.rowcount > 0:
+                logger.info(f"会议 {meeting_id} 状态已更新为: {status}")
+                db.commit()
+                return True
+            else:
+                logger.warning(f"未找到会议 {meeting_id} 或无需更新")
+                return False
+
+        except Exception as e:
+            logger.error(f"更新会议 {meeting_id} 状态失败: {str(e)}")
             raise
 
     async def get_meetings(self, db: Session, current_user_id: str) -> list[Meeting]:

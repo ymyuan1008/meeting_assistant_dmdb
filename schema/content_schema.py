@@ -94,7 +94,6 @@ class SentenceItem(BaseModel):
         return bool(self.cleaned_sentence)
 
 
-
 class TranslateTextContent(BaseModel):
     completedSentences: List[SentenceItem] = Field(default_factory=list)
     textVal: str = ""

@@ -25,7 +25,7 @@ class Transcription(SQLBaseModel):  # 继承SQL基类
     speaker_id = Column(String(50), nullable=False)
     speaker_name = Column(String(50))
     text_message = Column(Text, nullable=False)
-    created_time = Column(DateTime(timezone=True), default=func.utcnow(), nullable=False)
+    created_time = Column(DateTime(timezone=True), nullable=False)
     is_action_item = Column(Boolean, default=False)
     is_decision = Column(Boolean, default=False)
 
@@ -46,7 +46,7 @@ class TranscriptionText(SQLBaseModel):  # 继承SQL基类
     other_meeting_id = Column(String(100), nullable=False)
     speaker_name = Column(String(100), nullable=True)
     text_message = Column(Text, nullable=False)
-    created_time = Column(DateTime, default=func.utcnow)
+    created_time = Column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (
         Index('idx_translation_texts_meeting_id', 'meeting_id'),

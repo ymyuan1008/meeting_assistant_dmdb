@@ -17,13 +17,13 @@ logger = logging.getLogger(__name__)
 class DMDatabaseAdapter(object):
     """达梦数据库适配器"""
 
-    def __init__(self):
+    def __init__(self)-> None:
         self.connection_pool = []
         self.pool_size = 10
         self.current_connections = 0
         self._lock = asyncio.Lock()
 
-    async def _create_connection(self) -> dmPython.Connection:
+    def _create_connection(self) -> dmPython.Connection:
         """创建达梦数据库连接"""
         try:
             connection = dmPython.connect(
@@ -53,7 +53,7 @@ class DMDatabaseAdapter(object):
             await asyncio.sleep(0.1)
             return await self._get_connection()
 
-    async def _return_connection(self, connection: dmPython.Connection):
+    async def _return_connection(self, connection: dmPython.Connection) -> None:
         """将连接返回到连接池"""
         async with self._lock:
             if len(self.connection_pool) < self.pool_size:
@@ -66,7 +66,7 @@ class DMDatabaseAdapter(object):
                     logger.error(f"关闭达梦数据库连接失败: {e}")
 
     @asynccontextmanager
-    async def get_connection(self):
+    async def get_connection(self) -> None:
         """获取数据库连接的上下文管理器"""
         connection = await self._get_connection()
         try:
@@ -138,7 +138,7 @@ class DMDatabaseAdapter(object):
             logger.error(f"达梦数据库连接测试失败: {e}")
             return False
 
-    async def close_all_connections(self):
+    async def close_all_connections(self)->None:
         """关闭所有连接"""
         async with self._lock:
             for connection in self.connection_pool:
@@ -151,13 +151,12 @@ class DMDatabaseAdapter(object):
             logger.info("所有达梦数据库连接已关闭")
 
 
-async def query_users():
+async def query_users()-> Optional[list[dict[str, Any]]]:
     # 假设 dm_adapter 已正确初始化
     dm_adapter = DMDatabaseAdapter()  # 你的数据库适配器实例化代码
 
     # 在异步函数内部使用 await 是合法的
     result = await dm_adapter.execute_query('select username from dba_users')
-    print("查询结果：", result)
     return result
 
 

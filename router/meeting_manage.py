@@ -602,6 +602,48 @@ async def generate_notification(meeting_id: str,
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+@router.patch(
+    "/{meeting_id}/status/completed",
+    summary="更新会议状态为已完成"
+)
+async def update_meeting_status_completed(
+        meeting_id: str,
+        current_user: User = Depends(require_auth),
+        db: Session = Depends(get_db)
+):
+    """
+    更新会议状态为已完成（completed）
+
+    - **meeting_id**: 会议的唯一标识符
+    - **返回**: 更新成功的响应
+    """
+    user_id = str(current_user.id)
+    try:
+        # 验证 user_id 是否合法
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Invalid user ID")
+
+        # 验证 meeting_id 是否合法
+        if not meeting_id or not isinstance(meeting_id, str):
+            raise HTTPException(status_code=400, detail="Invalid meeting ID")
+
+        # 更新会议状态
+        update_success = await meeting_service.modify_meeting_status(db, meeting_id, "completed")
+
+        if not update_success:
+            raise HTTPException(status_code=404, detail="Meeting not found or already completed")
+
+        # 记录成功日志
+        logger.info(f"Successfully updated meeting {meeting_id} status to 'completed' for user: {user_id}")
+        return {"data": None, "code": 200, "message": "会议状态更新成功"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        # 记录错误日志
+        logger.error(f"Failed to update meeting {meeting_id} status for user: {user_id}, error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
 
 # 后台任务：连接外部 wss 服务并接收消息
 @router.post("/translate_text_load")
@@ -618,6 +660,7 @@ async def translate_text_load(request: TranslationTextRequest, db: Session = Dep
         dict: 操作结果
     """
     try:
+        created_time = datetime.now(tz)
         meeting_id = request.meetingId
         other_meeting_id = request.otherMeetingId
         translate_text = request.translateText
@@ -633,7 +676,7 @@ async def translate_text_load(request: TranslationTextRequest, db: Session = Dep
             other_meeting_id=other_meeting_id,
             speaker_name=json.dumps(request.extract_conversation_data()['speakers'], ensure_ascii=False),
             text_message=json.dumps(request.translateText, ensure_ascii=False),
-            created_time=datetime.now(pytz.timezone())
+            created_time=created_time
         )
         # 添加到数据库
         db.add(translation_record)
@@ -647,10 +690,11 @@ async def translate_text_load(request: TranslationTextRequest, db: Session = Dep
         combined_text = f"""原文:{original_text}音频文件转译:{translated_text}"""
         # 创建规整化翻译文本记录
         video_translation_text = Transcription(
+            id=str(uuid.uuid4()),
             meeting_id=meeting_id,
             speaker_name=json.dumps(request.extract_conversation_data()['speakers'], ensure_ascii=False),
             text_message=combined_text,
-            created_time=datetime.now(pytz.timezone())
+            created_time=created_time
         )
         # 添加到数据库
         db.add(video_translation_text)

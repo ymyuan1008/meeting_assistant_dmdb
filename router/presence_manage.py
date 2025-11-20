@@ -70,7 +70,7 @@ async def presence_ws(websocket: WebSocket, meeting_id: str) -> None:
         return
 
     # 数据库校验：用户属于会议参与者
-    db: Session = db_manager.sync_session_factory()
+    db: Session = dm_db_manager.sync_session_factory()
     try:
         participant = db.query(Participant).filter(
             Participant.meeting_id == meeting_id,

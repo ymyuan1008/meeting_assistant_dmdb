@@ -617,7 +617,6 @@ class DocumentService(object):
     async def _generate_minutes_word(self, meeting: Meeting, transcriptions: Transcription) -> str:
         """Generate Word format meeting minutes"""
         doc = Document()
-
         # 构建文档的各个部分
         self._add_document_title(doc)
         self._add_meeting_details(doc, meeting)
@@ -675,7 +674,7 @@ class DocumentService(object):
     def _add_transcription_paragraph(self, doc: Document, transcription: Transcription) -> None:
         """添加单个转录段落"""
 
-        timestamp = self._convert_to_east8_time(transcription.created_time).strftime('%H:%M:%S')
+        timestamp = transcription.created_time.strftime('%H:%M:%S')
         print("--------------------------------------------")
         # 处理转译文本
         if '👤' in transcription.text_message:
