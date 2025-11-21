@@ -1,6 +1,5 @@
 from typing import List
 from sqlalchemy.orm import Session, selectinload
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete
 from loguru import logger
 from datetime import datetime
@@ -61,7 +60,7 @@ class MessageService(object):
         db.refresh(msg)
         return msg
 
-    async def list_messages(
+    def list_messages(
             self,
             db: Session,
             recipient_id: str,
@@ -156,10 +155,10 @@ class MessageService(object):
 
         mr.is_read = True
         mr.read_at = datetime.now(shanghai_tz)
-        await db.commit()
+        db.commit()
         return True
 
-    async def mark_read_batch(self,
+  def mark_read_batch(self,
                               db: Session,
                               recipient_id: str,
                               message_ids: list[str]) -> int:
@@ -183,7 +182,7 @@ class MessageService(object):
             return 0
 
         # 查询当前用户且未读的关联记录
-        rows = await db.execute(
+        rows = db.execute(
             select(MessageRecipient).where(
                 (MessageRecipient.recipient_id == recipient_id) &
                 (MessageRecipient.message_id.in_(cast_message_ids)) &
@@ -199,9 +198,9 @@ class MessageService(object):
             mr.is_read = True
             mr.read_at = now_ts
 
-        await db.commit()
+        db.commit()
         return len(recipients)
-    async def delete_message_links(self,
+    def delete_message_links(self,
                                    db: Session,
                                    recipient_id: str,
                                    is_read: bool | None = None,
@@ -233,8 +232,8 @@ class MessageService(object):
         if len(conditions) == 1:
             raise ValueError("必须提供 is_read 或 message_id 之一，以限制删除范围")
 
-        result = await db.execute(
+        result = db.execute(
             delete(MessageRecipient).where(*conditions)
         )
-        await db.commit()
+        db.commit()
         return int(result.rowcount or 0)

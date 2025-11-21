@@ -107,7 +107,7 @@ def send_message(payload: MessageCreate,
 
 
 @router.get("/list", summary="查询我的消息", response_model=dict)
-async def list_my_messages(
+def list_my_messages(
     page: int = Query(default=1, ge=1, description="页码，从1开始"),
     page_size: int = Query(default=20, ge=1, le=100, description="每页数量，最大100"),
     only_unread: bool | None = Query(default=None, description="是否仅查询未读消息"),
@@ -119,7 +119,7 @@ async def list_my_messages(
         # 根据 only_unread 控制是否仅查询未读消息；未提供则视为 False
         only_unread_effective = only_unread if only_unread is not None else False
 
-        messages, total =await  message_service.list_messages(
+        messages, total = message_service.list_messages(
             db,
             recipient_id=str(current_user.id),
             only_unread=only_unread_effective,
@@ -196,12 +196,12 @@ def mark_read(message_id: str,
 
 
 @router.post("/mark-read/batch", summary="批量标记消息为已读", response_model=dict)
-async def mark_read_batch(payload: BatchMarkReadRequest,
+def mark_read_batch(payload: BatchMarkReadRequest,
                           db: Session = Depends(get_db),
                           current_user: User = Depends(require_auth)):
     """批量将当前用户的指定消息标记为已读"""
     try:
-        updated = await message_service.mark_read_batch(
+        updated = message_service.mark_read_batch(
             db=db,
             recipient_id=str(current_user.id),
             message_ids=payload.message_ids,
@@ -218,7 +218,7 @@ async def mark_read_batch(payload: BatchMarkReadRequest,
 
 
 @router.delete("/delete", summary="删除当前用户与消息的关联(仅删除关联表)", response_model=dict)
-async def delete_message_links(
+def delete_message_links(
     is_read: bool | None = Query(default=None, description="按已读/未读状态删除；不传表示不限"),
     message_id: str | None = Query(default=None, description="指定消息ID；与 is_read 可组合过滤"),
     db: Session = Depends(get_db),
@@ -233,7 +233,7 @@ async def delete_message_links(
         if is_read is None and message_id is None:
             raise HTTPException(status_code=400, detail="必须提供 is_read 或 message_id 之一")
 
-        deleted = await message_service.delete_message_links(
+        deleted = message_service.delete_message_links(
             db=db,
             recipient_id=str(current_user.id),
             is_read=is_read,
