@@ -158,8 +158,7 @@ class MessageService(object):
         db.commit()
         return True
 
-  def mark_read_batch(self,
-                              db: Session,
+    def mark_read_batch(self,db: Session,
                               recipient_id: str,
                               message_ids: list[str]) -> int:
         """批量标记多条消息为已读（针对当前用户）
