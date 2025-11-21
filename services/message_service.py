@@ -84,6 +84,9 @@ class MessageService(object):
         if only_unread:
             conditions.append(MessageRecipient.is_read == False)
 
+        # 添加调试日志
+        logger.info(f"查询用户消息: recipient_id={recipient_id}, only_unread={only_unread}, page={page}, page_size={page_size}")
+
         # 统计总数：使用子查询对 message_id 去重后计数，避免某些驱动/数据库下 distinct 计数问题
         ids_distinct_subq = (
             select(MessageRecipient.message_id)
@@ -123,7 +126,7 @@ class MessageService(object):
         messages = data_result.scalars().all()
         return messages, total
 
-    async def mark_read(self,
+    def mark_read(self,
                         db: Session,
                         message_id: str,
                         recipient_id: str) -> bool:
@@ -143,6 +146,9 @@ class MessageService(object):
         if not rid_str:
             raise ValueError("recipient_id 不能为空")
 
+        # 添加调试日志
+        logger.info(f"尝试标记消息已读: message_id={mid_int}, recipient_id={rid_str}")
+
         result = db.execute(
             select(MessageRecipient).where(
                 (MessageRecipient.message_id == mid_int) & (MessageRecipient.recipient_id == rid_str)
@@ -151,14 +157,28 @@ class MessageService(object):
         mr = result.scalar_one_or_none()
 
         if not mr:
+            logger.warning(f"未找到消息记录: message_id={mid_int}, recipient_id={rid_str}")
+            # 查询所有该用户的消息记录用于调试
+            all_records = db.execute(
+                select(MessageRecipient).where(MessageRecipient.recipient_id == rid_str)
+            ).scalars().all()
+            logger.info(f"用户 {rid_str} 的所有消息记录: {[{'message_id': r.message_id, 'is_read': r.is_read} for r in all_records]}")
             return False
 
+        logger.info(f"找到消息记录，更新前状态: is_read={mr.is_read}")
         mr.is_read = True
         mr.read_at = datetime.now(shanghai_tz)
-        db.commit()
+
+        # 提交前再次检查状态
+        logger.info(f"更新后状态: is_read={mr.is_read}, read_at={mr.read_at}")
+
+        # 注意：不再手动提交，让 FastAPI 的依赖注入自动处理
+        # db.commit() # 注释掉手动提交
+        logger.info(f"数据更新完成，等待FastAPI自动提交: message_id={mid_int}, recipient_id={rid_str}")
+
         return True
 
-  def mark_read_batch(self,
+    def mark_read_batch(self,
                               db: Session,
                               recipient_id: str,
                               message_ids: list[str]) -> int:
@@ -198,8 +218,11 @@ class MessageService(object):
             mr.is_read = True
             mr.read_at = now_ts
 
-        db.commit()
+        # 不再手动提交，让 FastAPI 的依赖注入自动处理
+        # db.commit()
+        logger.info(f"批量更新完成，等待FastAPI自动提交: 更新数量={len(recipients)}")
         return len(recipients)
+
     def delete_message_links(self,
                                    db: Session,
                                    recipient_id: str,
@@ -235,5 +258,8 @@ class MessageService(object):
         result = db.execute(
             delete(MessageRecipient).where(*conditions)
         )
-        db.commit()
-        return int(result.rowcount or 0)
+        # 不再手动提交，让 FastAPI 的依赖注入自动处理
+        # db.commit()
+        deleted_count = int(result.rowcount or 0)
+        logger.info(f"删除操作完成，等待FastAPI自动提交: 删除数量={deleted_count}")
+        return deleted_count
