@@ -144,6 +144,7 @@ def list_my_messages(
                 rec_entity = rec_map.get(m.id)
                 if not rec_entity:
                     # 如果没有找到当前用户的接收记录，跳过该消息
+                    logger.warning(f"消息 {m.id} 未找到接收记录，跳过")
                     continue
 
                 data = MessageForUserResponse(
@@ -157,6 +158,7 @@ def list_my_messages(
                     read_at=rec_entity.read_at,
                 )
                 results.append(data.dict())
+                logger.info(f"消息 {m.id} 状态: is_read={rec_entity.is_read}")
 
         total_pages = (total + page_size - 1) // page_size
         has_next = page < total_pages

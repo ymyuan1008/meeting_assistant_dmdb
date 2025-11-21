@@ -33,7 +33,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 # 自定义库
-from db.databases import Base
+from db.dm_conn import Base
 
 class SignRequest(BaseModel):
     meeting_id: str
@@ -109,18 +109,62 @@ class TranslationTextRequest(BaseModel):
         return v
 
     def get_parsed_translate_text(self) -> TranslateTextContent:
-        """获取解析后的translateText内容"""
+        """获取解析后的translateText内容，兼容 dict/list/str 类型的 translateText"""
         if isinstance(self.translateText, str):
             try:
                 parsed = json.loads(self.translateText)
             except json.JSONDecodeError:
-                # 如果解析失败，返回空的TranslateTextContent
-                return TranslateTextContent()
+                # 如果解析失败，视为纯文本返回
+                return TranslateTextContent(textVal=self.translateText)
         else:
             parsed = self.translateText
 
-        # 转换为强类型模型
-        return TranslateTextContent(**parsed)
+        # 已经是目标类型，直接返回
+        if isinstance(parsed, TranslateTextContent):
+            return parsed
+
+        # 如果是 dict，尝试直接构造；若子项格式不规范则做兼容处理
+        if isinstance(parsed, dict):
+            try:
+                return TranslateTextContent(**parsed)
+            except Exception:
+                # 兼容常见变体：completedSentences 可能缺失或格式不统一
+                cs = parsed.get("completedSentences") or parsed.get("completed_sentences") or []
+                items = []
+                for it in cs:
+                    if isinstance(it, SentenceItem):
+                        items.append(it)
+                    elif isinstance(it, dict):
+                        try:
+                            items.append(SentenceItem(**it))
+                        except Exception:
+                            items.append(SentenceItem(sentence=str(it)))
+                    else:
+                        items.append(SentenceItem(sentence=str(it)))
+                text_val = parsed.get("textVal") or parsed.get("text_val") or ""
+                return TranslateTextContent(completedSentences=items, textVal=text_val)
+
+        # 如果是列表，视为 completedSentences 列表
+        if isinstance(parsed, list):
+            items = []
+            for it in parsed:
+                if isinstance(it, SentenceItem):
+                    items.append(it)
+                elif isinstance(it, dict):
+                    try:
+                        items.append(SentenceItem(**it))
+                    except Exception:
+                        items.append(SentenceItem(sentence=str(it)))
+                else:
+                    items.append(SentenceItem(sentence=str(it)))
+            return TranslateTextContent(completedSentences=items)
+
+        # 如果是纯文本
+        if isinstance(parsed, str):
+            return TranslateTextContent(textVal=parsed)
+
+        # 兜底返回空模型
+        return TranslateTextContent()
 
     def extract_conversation_data(self) -> Dict[str, Any]:
         """提取完整的对话数据"""
