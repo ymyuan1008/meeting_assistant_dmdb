@@ -167,6 +167,8 @@ class MeetingService(object):
                     topic_type2=agenda_data.topic_type2,
                     topic_type3=agenda_data.topic_type3,
                     is_escalation=agenda_data.is_escalation,
+                    create_time=datetime.now(),
+                    update_time=datetime.now(),
                     created_by = agenda_data.created_by  # 添加创建人字段
                 )
                 db.add(db_agenda)

@@ -152,8 +152,8 @@ class DocumentService(object):
         footer = doc.add_paragraph('请及时确认参会状态，如有冲突请提前告知。')
         footer.add_run(f'\n\n生成时间：{datetime.now().strftime("%Y年%m月%d日 %H:%M")}')
         # Save document
-        filename = f"meeting_notification_{meeting.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
-        object_name = f"meeting_notification_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+        filename = f"会议通知_{meeting.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+        object_name = f"会议通知_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
         filepath = os.path.join(self.output_dir, filename)
         doc.save(filepath)
         # 如果未配置 MinIO 或 console 地址缺失，则直接返回本地文件路径
@@ -674,21 +674,26 @@ class DocumentService(object):
     def _add_transcription_paragraph(self, doc: Document, transcription: Transcription) -> None:
         """添加单个转录段落"""
 
-        timestamp = transcription.created_time.strftime('%H:%M:%S')
-        print("--------------------------------------------")
         # 处理转译文本
         if '👤' in transcription.text_message:
             # 按说话人标识分割并过滤空字符串
             parts = [part.strip() for part in transcription.text_message.split('👤') if part.strip()]
 
             for part in parts:
-                # 移除双引号并创建段落
+                # 移除双引号
                 cleaned_text = part.replace('"', '')
-                paragraph = doc.add_paragraph(f'[{timestamp}]  {cleaned_text}')
-        else:
-            # 如果没有明确的分割，保持原样
-            paragraph = doc.add_paragraph(f'[{timestamp}] {transcription.text_message}')
-
+                # 提取时间戳（假设时间戳格式为 [YYYY-MM-DD HH:MM:SS]）
+                time_start = cleaned_text.find('[')
+                time_end = cleaned_text.find(']')
+                if time_start != -1 and time_end != -1:
+                    timestamp = "[" + cleaned_text[time_start + 1:time_end].strip() + "]"
+                    # 移除原始文本中的时间戳部分
+                    text_content = cleaned_text[:time_start].strip() + cleaned_text[time_end + 1:].strip()
+                    # 构建新格式段落
+                    paragraph = doc.add_paragraph(f'{timestamp}   {text_content}')
+                else:
+                    # 没有时间戳时保持原始格式
+                    paragraph = doc.add_paragraph(f' {cleaned_text}')
 
     def _add_action_items_summary(self, doc: Document, transcriptions: Transcription) -> None:
         """添加行动项汇总"""
@@ -724,8 +729,8 @@ class DocumentService(object):
 
     def _save_document(self, doc: Document, meeting: Meeting) -> str:
         """保存文档并返回文件路径"""
-        filename = f"meeting_minutes_{meeting.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
-        object_name = f"meeting_minutes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+        filename = f"会议摘要_{meeting.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+        object_name = f"会议摘要_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
         filepath = os.path.join(self.output_dir, filename)
         doc.save(filepath)
         # 如果未配置 MinIO 或 console 地址缺失，则直接返回本地文件路径

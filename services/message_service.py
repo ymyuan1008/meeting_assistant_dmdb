@@ -15,7 +15,7 @@ class MessageService(object):
     - 兼容用户ID为字符串UUID（与 User.id 对齐）
     """
 
-    async def send_message(self,
+    def send_message(self,
                            db: AsyncSession,
                            sender_id: str,
                            title: str,
@@ -50,15 +50,15 @@ class MessageService(object):
         # 创建消息
         msg = Message(title=title, content=content, sender_id=sid)
         db.add(msg)
-        await db.flush()
+        db.flush()
 
         # 创建接收者关联记录
         for rid_str in cast_recipient_ids:
             mr = MessageRecipient(message_id=msg.id, recipient_id=rid_str, is_read=False)
             db.add(mr)
 
-        await db.commit()
-        await db.refresh(msg)
+        db.commit()
+        db.refresh(msg)
         return msg
 
     async def list_messages(

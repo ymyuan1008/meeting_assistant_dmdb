@@ -687,7 +687,7 @@ async def translate_text_load(request: TranslationTextRequest, db: Session = Dep
         original_text = request.extract_conversation_data()['full_text']
         translated_text = request.translateText['audioTranslationData']
 
-        combined_text = f"""原文:{original_text}音频文件转译:{translated_text}"""
+        combined_text = f"""{original_text} {translated_text}"""
         # 创建规整化翻译文本记录
         video_translation_text = Transcription(
             id=str(uuid.uuid4()),
