@@ -179,12 +179,12 @@ async def list_my_messages(
 
 
 @router.post("/{message_id}/mark-read", summary="标记消息为已读", response_model=dict)
-async def mark_read(message_id: str,
+def mark_read(message_id: str,
                     db: Session = Depends(get_db),
                     current_user: User = Depends(require_auth)):
     """将当前用户的指定消息标记为已读"""
     try:
-        ok = await message_service.mark_read(db, message_id=message_id, recipient_id=str(current_user.id))
+        ok = message_service.mark_read(db, message_id=message_id, recipient_id=str(current_user.id))
         if not ok:
             raise HTTPException(status_code=404, detail="消息不存在或未关联到当前用户")
         return _resp({"message_id": message_id, "read": True})

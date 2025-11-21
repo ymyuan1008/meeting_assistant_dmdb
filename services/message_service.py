@@ -16,7 +16,7 @@ class MessageService(object):
     """
 
     def send_message(self,
-                           db: AsyncSession,
+                           db:Session,
                            sender_id: str,
                            title: str,
                            content: str,
@@ -125,7 +125,7 @@ class MessageService(object):
         return messages, total
 
     async def mark_read(self,
-                        db: AsyncSession,
+                        db: Session,
                         message_id: str,
                         recipient_id: str) -> bool:
         """标记某条消息为已读
@@ -144,7 +144,7 @@ class MessageService(object):
         if not rid_str:
             raise ValueError("recipient_id 不能为空")
 
-        result = await db.execute(
+        result = db.execute(
             select(MessageRecipient).where(
                 (MessageRecipient.message_id == mid_int) & (MessageRecipient.recipient_id == rid_str)
             ).limit(1)
@@ -160,7 +160,7 @@ class MessageService(object):
         return True
 
     async def mark_read_batch(self,
-                              db: AsyncSession,
+                              db: Session,
                               recipient_id: str,
                               message_ids: list[str]) -> int:
         """批量标记多条消息为已读（针对当前用户）
@@ -202,7 +202,7 @@ class MessageService(object):
         await db.commit()
         return len(recipients)
     async def delete_message_links(self,
-                                   db: AsyncSession,
+                                   db: Session,
                                    recipient_id: str,
                                    is_read: bool | None = None,
                                    message_id: str | None = None) -> int:

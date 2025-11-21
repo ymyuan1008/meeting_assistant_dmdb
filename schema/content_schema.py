@@ -127,7 +127,7 @@ class TranslationTextRequest(BaseModel):
     meetingId: str
     otherMeetingId: str
     translateText: Union[str, Dict[str, Any], TranslateTextContent]
-    speakerName: str = Field(default="")
+    speakerName: Union[str, None] = None  # 允许为 None
 
     @validator('translateText', pre=True)
     def parse_translate_text(cls, v):
@@ -138,6 +138,14 @@ class TranslationTextRequest(BaseModel):
             except json.JSONDecodeError:
                 return v  # 如果解析失败，返回原字符串
         return v
+    @validator("speakerName", pre=True, always=True)
+    def set_default_speaker(cls, v):
+        # 如果 v 是 None 或空字符串，返回默认值
+        if v is None or v.strip() == "":
+            return "未知人员"
+        return v
+
+
 
     def get_parsed_translate_text(self) -> TranslateTextContent:
         """获取解析后的translateText内容"""

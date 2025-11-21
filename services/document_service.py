@@ -428,7 +428,7 @@ class DocumentService(object):
 
     def _add_title_section(self, story: list, title_style: ParagraphStyle) -> None:
         """添加标题部分"""
-        story.append(Paragraph("会议纪要", title_style))
+        story.append(Paragraph("会议摘要", title_style))
         story.append(Spacer(1, 20))
 
     def _add_meeting_info_section(self, story: list, meeting: Meeting,
@@ -520,7 +520,7 @@ class DocumentService(object):
         """添加页脚部分"""
         story.append(Spacer(1, 30))
         story.append(Paragraph(
-            f"会议纪要生成时间：{datetime.now().strftime(DATETIME_CHINESE_SIMPLE)}",
+            f"会议摘要生成时间：{datetime.now().strftime(DATETIME_CHINESE_SIMPLE)}",
             normal_style
         ))
 
@@ -631,7 +631,7 @@ class DocumentService(object):
 
     def _add_document_title(self, doc: Document) -> None:
         """添加文档标题"""
-        title = doc.add_heading('会议纪要', 0)
+        title = doc.add_heading('会议摘要', 0)
         title.alignment = 1  # 居中对齐
 
 
@@ -725,7 +725,7 @@ class DocumentService(object):
         """添加文档页脚"""
         doc.add_paragraph('')
         current_time = datetime.now().strftime("%Y年%m月%d日 %H:%M")
-        doc.add_paragraph(f'会议纪要生成时间：{current_time}')
+        doc.add_paragraph(f'会议摘要生成时间：{current_time}')
 
     def _save_document(self, doc: Document, meeting: Meeting) -> str:
         """保存文档并返回文件路径"""

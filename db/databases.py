@@ -2,11 +2,21 @@
 达梦数据库适配器
 由于达梦数据库的特殊性，提供专门的适配器来处理连接和SQL语句
 """
-import dmPython
+
+# 标准库
 import asyncio
 from typing import Dict, List, Any, Optional
 from contextlib import asynccontextmanager
 import logging
+
+# 第三方库
+import dmPython
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
+
+
 import os
 
 
@@ -47,7 +57,7 @@ class DMDatabaseAdapter(object):
 
             if self.current_connections < self.pool_size:
                 self.current_connections += 1
-                return await self._create_connection()
+                return self._create_connection()
 
             # 如果连接池满了，等待一段时间后重试
             await asyncio.sleep(0.1)
@@ -165,4 +175,4 @@ if __name__ == "__main__":
     import asyncio
 
     # 用 asyncio.run() 启动事件循环并执行异步函数
-    asyncio.run(query_users())
+    print(asyncio.run(query_users()))
