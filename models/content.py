@@ -26,8 +26,8 @@ class Transcription(SQLBaseModel):  # 继承SQL基类
     speaker_name = Column(String(50))
     text_message = Column(Text, nullable=False)
     created_time = Column(DateTime(timezone=True), nullable=False)
-    is_action_item = Column(Boolean, default=False)
-    is_decision = Column(Boolean, default=False)
+    is_action_item = Column(Boolean, default=False, nullable=True)
+    is_decision = Column(Boolean, default=False, nullable=True)
 
     meeting = relationship("Meeting", back_populates="transcriptions")
 

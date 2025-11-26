@@ -655,7 +655,7 @@ class DocumentService(object):
             cells[0].text = label
             cells[1].text = value
 
-    def _add_transcription_content(self, doc: Document, transcriptions: Transcription) -> None:
+    def _add_transcription_content(self, doc: Document, transcriptions: list[Transcription]) -> None:
         """添加转录内容"""
         if not transcriptions:
             return
@@ -663,17 +663,19 @@ class DocumentService(object):
         doc.add_heading('会议内容', level=1)
 
         current_speaker = None
-        if transcriptions.speaker_name != current_speaker:
-            current_speaker = transcriptions.speaker_id
-            doc.add_heading(f'{current_speaker}:', level=3)
-        #for transcription in transcriptions:
+        for transcription in transcriptions:
+            print("转译内容",transcription)
+            if transcription.speaker_name != current_speaker:
+                current_speaker = transcription.speaker_id
+                doc.add_heading(f'{current_speaker}:', level=3)
 
-
-        self._add_transcription_paragraph(doc, transcriptions)
+            self._add_transcription_paragraph(doc, transcription)
+            break
 
     def _add_transcription_paragraph(self, doc: Document, transcription: Transcription) -> None:
         """添加单个转录段落"""
 
+        print("转译源文本", transcription.text_message)
         # 处理转译文本
         if '👤' in transcription.text_message:
             # 按说话人标识分割并过滤空字符串
@@ -694,32 +696,28 @@ class DocumentService(object):
                 else:
                     # 没有时间戳时保持原始格式
                     paragraph = doc.add_paragraph(f' {cleaned_text}')
+        else:
+            paragraph = doc.add_paragraph(f'{transcription.text_message}')
 
-    def _add_action_items_summary(self, doc: Document, transcriptions: Transcription) -> None:
-        """添加行动项汇总"""
-        if not transcriptions:
-            return
-        #action_items = [t for t in transcriptions if t.is_action_item]
-        action_items = transcriptions.is_action_item
-        if not action_items:
-            return
+    def _add_action_items_summary(self, doc: Document, transcriptions: list[Transcription]) -> None:
+         """添加行动项汇总"""
+         action_items = [t for t in transcriptions if t.is_action_item]
+         if not action_items:
+             return
 
-        doc.add_heading('行动项汇总', level=1)
-        for i, item in enumerate(action_items, 1):
-            doc.add_paragraph(f'{i}. {item.text_message}', style='List Number')
+         doc.add_heading('行动项汇总', level=1)
+         for i, item in enumerate(action_items, 1):
+             doc.add_paragraph(f'{i}. {item.text}', style='List Number')
 
     def _add_decisions_summary(self, doc: Document, transcriptions: list[Transcription]) -> None:
         """添加决议汇总"""
-        if not transcriptions:
-            return
-        #decisions = [t for t in transcriptions if t.is_decision]
-        decisions = transcriptions.is_decision
+        decisions = [t for t in transcriptions if t.is_decision]
         if not decisions:
             return
 
         doc.add_heading('重要决议', level=1)
         for i, decision in enumerate(decisions, 1):
-            doc.add_paragraph(f'{i}. {decision.text_message}', style='List Number')
+            doc.add_paragraph(f'{i}. {decision.text}', style='List Number')
 
     def _add_document_footer(self, doc: Document) -> None:
         """添加文档页脚"""

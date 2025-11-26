@@ -28,7 +28,7 @@ from  models import Transcription,PersonSign, User, TranscriptionText
 from services.excel_service import ExcelService
 
 from schema import MeetingCreate, TranscriptionCreate,MeetingUpdate, AttachmentCreate, AttachmentUpdate
-from schema import  DailyWorkResponse, MeetingAgendaResponse, MeetingResponse,MeetingLedgerResponse
+from schema import  DailyWorkResponse, MeetingAgendaResponse, MeetingResponse,MeetingLedgerResponse,TranscriptionResponse
 
 
 shanghai_tz = pytz.timezone('Asia/Shanghai')
@@ -836,15 +836,16 @@ class MeetingService(object):
             # 重新抛出异常，让接口层捕获并返回 500 错误
             raise e
 
-    async def get_meeting_transcriptions(self, db: Session, meeting_id: str) -> list[Transcription]:
+    async def get_meeting_transcriptions(self, db: Session, meeting_id: str):
         """Get all transcriptions for a meeting"""
         return db.query(TranscriptionText).filter(TranscriptionText.meeting_id == meeting_id).order_by(
             TranscriptionText.created_time.asc()).all()
 
-    async def get_transcription_message(self, db: Session, meeting_id: str) -> Transcription:
+    async def get_transcription_message(self, db: Session, meeting_id: str):
         """Get all transcriptions for a meeting"""
-        return db.query(Transcription).filter(Transcription.meeting_id == meeting_id).order_by(
-            Transcription.created_time.desc()).first()
+        query = db.query(Transcription).filter(Transcription.meeting_id == meeting_id).order_by(Transcription.created_time.desc())
+        result = query.all()
+        return result
 
     async def update_meeting_status(self, db: Session, meeting_id: str, status: str) -> bool:
         """Update meeting status"""

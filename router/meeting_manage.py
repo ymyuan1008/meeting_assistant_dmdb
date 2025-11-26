@@ -575,6 +575,7 @@ async def generate_minutes(meeting_id: str,
             raise HTTPException(status_code=404, detail=MEETING_NOT_FOUND_DETAIL)
 
         transcriptions = await meeting_service.get_transcription_message(db, meeting_id)
+
         doc_path = await document_service.generate_minutes(meeting, transcriptions)
         download_file = {"document_path": doc_path}
 

@@ -99,7 +99,7 @@ class DMDatabaseSessionManager(object):
         try:
             self.async_engine = create_async_engine(
                 self.config.async_url,
-                echo=False,
+                echo=True,
                 pool_size=5,  # 异步连接池较小
                 max_overflow=10,
                 pool_recycle=3600,
