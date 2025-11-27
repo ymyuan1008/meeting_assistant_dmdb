@@ -31,7 +31,7 @@ class UserService(object):
             # 唯一性检查（仅用户名）
             exists = db.query(User).filter(User.user_name == user_data.user_name).first()
             if exists:
-                raise ValueError("user_name 已被占用")
+                raise ValueError(f'用户{User.user_name}已经存在')
 
             # 加密密码（支持未提供密码时使用默认密码）
             plain_password = user_data.password or "Test@1234"

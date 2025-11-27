@@ -80,8 +80,9 @@ class DMDatabaseSessionManager(object):
             self.config.sync_url,
             echo=True,  # 开发环境可以设为True查看SQL日志
             pool_pre_ping=True,  # 连接有效性检查
-            pool_size=10,  # 连接池大小
-            max_overflow=20,  # 最大溢出连接数
+            pool_size=50,  # 连接池大小
+            max_overflow=30,  # 最大溢出连接数
+            pool_timeout=5,
             pool_recycle=3600,  # 连接回收时间(秒)
             connect_args={
                 'autoCommit': False,  # 手动控制事务
