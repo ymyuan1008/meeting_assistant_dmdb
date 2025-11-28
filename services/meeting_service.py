@@ -100,6 +100,7 @@ def create_ledger_info(sample_data: List[Dict]):
 
     # 2. 准备数据（支持列表或字典格式）
     sample_data = sample_data
+    print("导出数据",sample_data)
 
     # 3. 定义表头（决定列顺序）
     headers = ["议题编号（内部使用）", "议题名称","议题提出部门","适用治理主体权责清单文件名及文号","适用治理主体权责清单事项编号（含三重一大编号）及具体事项",
@@ -140,6 +141,25 @@ def create_ledger_info(sample_data: List[Dict]):
         filename_prefix="台账登记管理"
     )
 
+
+def safe_listagg(field, separator=','):
+    """
+    达梦超长文本拼接兼容：
+    - 高版本：使用LISTAGG_WITH_OVERFLOW（支持CLOB，无长度限制）
+    - 低版本：CAST扩展到65535（达梦VARCHAR最大值）
+    - 空值过滤：避免拼接NULL导致结果为空
+    """
+    # 先过滤空值，避免NULL污染拼接结果
+    field = func.coalesce(field, '')
+    try:
+        # 优先使用达梦超长拼接函数（推荐）
+        return func.listagg_with_overflow(func.distinct(field), separator).within_group(field)
+    except AttributeError:
+        # 低版本达梦兼容：强制转换为超长VARCHAR
+        return cast(
+            func.listagg(func.distinct(field), separator).within_group(field),
+            VARCHAR(65535)
+        )
 
 class MeetingService(object):
     async def create_meeting(self, db: Session, meeting_data: MeetingCreate, user_id: str) -> MeetingAgendaResponse:
@@ -390,7 +410,6 @@ class MeetingService(object):
             logger.error(f"会议台账查询失败：{str(e)}", exc_info=True)
             raise
 
-
     async def export_daily_work(
             self,
             db: Session,
@@ -425,7 +444,7 @@ class MeetingService(object):
                 func.listagg(func.distinct(Transcription.text_message), ',').within_group(
                     Transcription.text_message).label('text_message'),
                 (Meeting.duration_minutes / 60).label('duration_minutes'),
-            func.listagg(func.distinct(User.name), ',').within_group(User.name).label('participant_names')
+                func.listagg(func.distinct(User.name), ',').within_group(User.name).label('participant_names')
             ).select_from(Meeting).join(Participant, Meeting.id == Participant.meeting_id) \
                 .join(User, Participant.user_code == User.id) \
                 .join(Agendas, Agendas.meeting_id == Meeting.id) \
@@ -447,11 +466,10 @@ class MeetingService(object):
             else:
                 results = query.all()
 
-
             # 生成文件名
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"履职工作日志_{timestamp}.xlsx"
-            file_path = './uploads/'+filename
+            file_path = './uploads/' + filename
             create_work_log(results)
             output_text = {}
             output_text["file_name"] = filename
@@ -518,8 +536,7 @@ class MeetingService(object):
                 Meeting.title,
                 literal("线上会议").label("meeting_type"),
                 literal("未知").label("host_user"),
-                # 3. 聚合函数替换：group_concat → wm_concat（达梦字符串聚合函数）
-                func.wm_concat(PersonSign.name).label('participant_names'),
+                safe_listagg(PersonSign.name).label('participant_names'),
                 literal("").label("领导参会详情"),
                 literal("").label("领导请假情况"),
                 func.count(distinct(PersonSign.user_code)).label('planned_attendance'),
@@ -558,6 +575,7 @@ class MeetingService(object):
 
             # 执行查询
             results = query.all()
+            
             # 生成文件名
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"台账登记管理_{timestamp}.xlsx"
