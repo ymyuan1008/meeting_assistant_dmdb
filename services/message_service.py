@@ -85,7 +85,8 @@ class MessageService(object):
             conditions.append(MessageRecipient.is_read == False)
 
         # 添加调试日志
-        logger.info(f"查询用户消息: recipient_id={recipient_id}, only_unread={only_unread}, page={page}, page_size={page_size}")
+        logger.info(f"查询用户消息: recipient_id={recipient_id}, "
+                    f"only_unread={only_unread}, page={page}, page_size={page_size}")
 
         # 统计总数：使用子查询对 message_id 去重后计数，避免某些驱动/数据库下 distinct 计数问题
         ids_distinct_subq = (

@@ -152,8 +152,7 @@ class NotificationService(object):
                     <p><strong>组织者：</strong>{meeting.organizer}</p>
                     {f'<p><strong>会议描述：</strong>{meeting.description}</p>' if meeting.description else ''}
                 </div>
-                {f'''
-                <div style="background-color: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 5px; margin: 20px 0;">
+                {f'''<div style="background-color: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 5px; margin: 20px 0;">
                     <h3 style="color: #2c3e50; margin-top: 0;">参会人员</h3>
                     <p>{participants_list}</p>
                 </div>

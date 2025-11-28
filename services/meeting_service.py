@@ -2,6 +2,7 @@
 import uuid
 import os
 
+from time import timezone
 from datetime import datetime, timezone
 from typing import List, Optional, Dict
 from loguru import logger
@@ -16,10 +17,10 @@ from sqlalchemy.dialects.mysql import VARCHAR
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy import func, select, case, distinct
-from sqlalchemy import literal, cast, String, text
+from sqlalchemy import literal, cast, text
 
 from fastapi import HTTPException
-from fastapi import UploadFile
+
 
 
 # 自定义类
@@ -27,8 +28,9 @@ from  models import Meeting, Participant, Agendas, Attachment
 from  models import Transcription,PersonSign, User, TranscriptionText
 from services.excel_service import ExcelService
 
-from schema import MeetingCreate, TranscriptionCreate,MeetingUpdate, AttachmentCreate, AttachmentUpdate
-from schema import  DailyWorkResponse, MeetingAgendaResponse, MeetingResponse,MeetingLedgerResponse,TranscriptionResponse
+from schema import MeetingCreate, TranscriptionCreate,MeetingUpdate
+from schema import  DailyWorkResponse, MeetingAgendaResponse
+from schema import  MeetingResponse,MeetingLedgerResponse
 
 
 shanghai_tz = pytz.timezone('Asia/Shanghai')
@@ -101,13 +103,16 @@ def create_ledger_info(sample_data: List[Dict]):
 
     # 3. 定义表头（决定列顺序）
     headers = ["议题编号（内部使用）", "议题名称","议题提出部门","适用治理主体权责清单文件名及文号","适用治理主体权责清单事项编号（含三重一大编号）及具体事项",
-               "议题决策程序(根据权责清单确定)","三重一大分类(根据权责清单中的三重一大编号判断)","三重一大系统事项编码*（按三重一大系统《企业'三重一大'事项清单采集指标》事项清单填写）","议题类型1（按权责清单中的'业务领域'填写）",
+               "议题决策程序(根据权责清单确定)","三重一大分类(根据权责清单中的三重一大编号判断)",
+               "三重一大系统事项编码*（按三重一大系统《企业'三重一大'事项清单采集指标》事项清单填写）","议题类型1（按权责清单中的'业务领域'填写）",
                "议题类型2","议题类型3","投资类议题金额（万元）","投资类议题是否开展专项调研","投资类议题是否开展重大投资项目评价及反馈","是否董事会授权","议题类型（原一览表要求）",
-               "是否涉及合规审核","是否涉及职工权益","是否属于依托治理型行权管控事项","是否党委前置研究讨论","是否召开专门委员会","是否报国资委*","会议时间*","会议名称*","会议形式*","主持人*","参会人*","领导参会详情",
-               "领导请假情况","应到人数","实到人数","投票同意","投票反对","投票弃权","投票结果","是否涉及回避原则","是否满足出席人数要求（原一览表要求）","纪委书记是否列席","总法律顾问/合规官是否列席","是否召开沟通会","列席部门/单位、具体人员"]
+               "是否涉及合规审核","是否涉及职工权益","是否属于依托治理型行权管控事项","是否党委前置研究讨论","是否召开专门委员会",
+               "是否报国资委*","会议时间*","会议名称*","会议形式*","主持人*","参会人*","领导参会详情",
+               "领导请假情况","应到人数","实到人数","投票同意","投票反对","投票弃权","投票结果","是否涉及回避原则","是否满足出席人数要求（原一览表要求）",
+               "纪委书记是否列席","总法律顾问/合规官是否列席","是否召开沟通会","列席部门/单位、具体人员"]
 
 
-    #"议题名称", "议题提出部门", "三重一大分类", "议题类型1", "议题类型2", "议题类型3", "是否董事会授权", "是否上报国资委", "会议时间", "会议名称", "会议形式", "主持人", "参会人", "应到人数", "实到人数"
+
     # 4. 定义合并单元格（可选）
     merge_cells = [
         ("A2:AP2", "统计时间：2025年11月6日 "),
@@ -189,6 +194,7 @@ class MeetingService(object):
                     created_at=datetime.now()
                 )
                 db.add(participant)
+                db.flush()
 
             # 处理附件（从上传的文件创建）
             for attachment_data in meeting_data.attachments:
@@ -204,6 +210,7 @@ class MeetingService(object):
                     uploaded_at=datetime.now()
                 )
                 db.add(attachment)
+                db.flush()
 
             db.commit()
             db.refresh(meeting)
@@ -218,13 +225,13 @@ class MeetingService(object):
             self,
             db: Session,
             current_user_id: str,
-            participants_list: List[str] = None,
+            participants_list: Optional[List[str]] = None,
             skip: int = 0,
             limit: int = 100
     ) -> List[DailyWorkResponse]:
-        """获取用户会议信息 - 适配达梦数据库"""
         try:
-            # 获取用户角色
+            # 权限校验...（同前）
+
             user_role = db.query(User.user_role).filter(
                 User.id == current_user_id).scalar() if current_user_id else None
             logger.info(f"查询用户 {current_user_id} 的会议信息，角色: {user_role}")
@@ -233,78 +240,67 @@ class MeetingService(object):
             if user_role != "admin":
                 logger.info(f"用户 {current_user_id} 非admin角色，无权限查询数据")
                 return []
-
-            # 处理参与者列表为空的情况
-            if not participants_list:
-                # 为空时不过滤参与者，查询所有会议
-                query = db.query(
-                    Meeting.id,
-                    Meeting.date_time,
-                    Meeting.title,
-                    # 达梦使用listagg进行分组拼接，distinct去重，分隔符为逗号
-                    func.listagg(func.distinct(Agendas.agenda_name), ',').within_group(Agendas.agenda_name).label(
-                        'agenda'),
-                    func.listagg(func.distinct(Transcription.text_message), ',').within_group(
-                        Transcription.text_message).label('text_message'),
-                    # 达梦需显式转换为浮点型避免整数除法取整
-                    (Meeting.duration_minutes / 60).label('duration_minutes'),
-                    func.listagg(func.distinct(User.name), ',').within_group(User.name).label('participant_names'),
-                    func.listagg(func.distinct(User.company), ',').within_group(User.company).label('company_names')
-                ).join(Participant, Meeting.id == Participant.meeting_id) \
-                    .join(User, Participant.user_code == User.id) \
-                    .join(Agendas, Agendas.meeting_id == Meeting.id) \
-                    .outerjoin(Transcription, Meeting.id == Transcription.meeting_id)
-            else:
-                # 不为空时过滤参与者
-                query = db.query(
-                    Meeting.id,
-                    Meeting.date_time,
-                    Meeting.title,
-                    func.listagg(func.distinct(Agendas.agenda_name), ',').within_group(Agendas.agenda_name).label(
-                        'agenda'),
-                    func.listagg(func.distinct(Transcription.text_message), ',').within_group(
-                        Transcription.text_message).label('text_message'),
-                    (Meeting.duration_minutes/ 60).label('duration_minutes'),
-                    func.listagg(func.distinct(User.name), ',').within_group(User.name).label('participant_names'),
-                    func.listagg(func.distinct(User.company), ',').within_group(User.company).label('company_names')
-                ).join(Participant, Meeting.id == Participant.meeting_id) \
-                    .join(User, Participant.user_code == User.id) \
-                    .join(Agendas, Agendas.meeting_id == Meeting.id) \
-                    .outerjoin(Transcription, Meeting.id == Transcription.meeting_id) \
-                    .filter(Participant.user_code.in_(participants_list))  # 过滤参与者
-
-            # 统一添加 GROUP BY、排序和分页
-            query = query.group_by(
+            query = db.query(
                 Meeting.id,
                 Meeting.date_time,
                 Meeting.title,
-                Meeting.duration_minutes  # 达梦要求GROUP BY包含所有非聚合列
-            )
+                Meeting.duration_minutes,
+                Agendas.agenda_name,
+                Transcription.text_message,
+                User.name,
+                User.company
+            ).join(Participant, Meeting.id == Participant.meeting_id) \
+                .join(User, Participant.user_code == User.id) \
+                .join(Agendas, Agendas.meeting_id == Meeting.id) \
+                .outerjoin(Transcription, Meeting.id == Transcription.meeting_id)
 
-            # 执行查询并处理结果
-            results = query.all()
+            if participants_list and len(participants_list) > 0:
+                query = query.filter(Participant.user_code.in_(participants_list))
 
+            raw_results = query.offset(skip).limit(limit).all()
+
+            # 步骤2：Python客户端分组拼接（无长度限制）
+            meeting_dict = {}
+            for row in raw_results:
+                meeting_id = row.id
+                if meeting_id not in meeting_dict:
+                    meeting_dict[meeting_id] = {
+                        "date_time": row.date_time,
+                        "title": row.title,
+                        "duration_minutes": row.duration_minutes / 60 if row.duration_minutes else None,
+                        "agenda": set(),
+                        "text_message": set(),
+                        "participant_names": set(),
+                        "company_names": set()
+                    }
+                # 去重拼接（用set避免重复）
+                if row.agenda_name:
+                    meeting_dict[meeting_id]["agenda"].add(row.agenda_name)
+                if row.text_message:  # CLOB文本直接添加，无长度限制
+                    meeting_dict[meeting_id]["text_message"].add(row.text_message)
+                if row.name:
+                    meeting_dict[meeting_id]["participant_names"].add(row.name)
+                if row.company:
+                    meeting_dict[meeting_id]["company_names"].add(row.company)
+
+            # 步骤3：转换为响应模型
             meetings = []
-            for row in results:
-                meetings.append({
-                    'meeting_id': row.id,
-                    'date_time': row.date_time,
-                    'title': row.title,
-                    'agenda': row.agenda,
-                    'text_message': row.text_message,
-                    'duration_minutes': row.duration_minutes,
-                    # 处理空值（达梦拼接空值可能返回空字符串而非None）
-                    'participant_names': row.participant_names.split(
-                        ',') if row.participant_names and row.participant_names != '' else [],
-                    'company_names': row.company_names.split(
-                        ',') if row.company_names and row.company_names != '' else []
-                })
+            for meeting_id, data in meeting_dict.items():
+                meetings.append(DailyWorkResponse(
+                    meeting_id=meeting_id,
+                    date_time=data["date_time"],
+                    title=data["title"],
+                    agenda=','.join(data["agenda"]) if data["agenda"] else '',
+                    text_message=','.join(data["text_message"]) if data["text_message"] else '',
+                    duration_minutes=data["duration_minutes"],
+                    participant_names=list(data["participant_names"]),
+                    company_names=list(data["company_names"])
+                ))
 
-            logger.info(f"成功查询到 {len(meetings)} 个会议")
             return meetings
 
         except Exception as e:
-            logger.error(f"查询会议失败（用户: {current_user_id}），错误: {str(e)}")
+            logger.error(f"查询失败：{e}", exc_info=True)
             raise
 
     async def get_ledger_info(
@@ -399,8 +395,8 @@ class MeetingService(object):
             self,
             db: Session,
             current_user_id: str,
-            participants_list: List[str] = None,
-            meeting_ids: List[str] = None
+            participants_list: list[str] = None,
+            meeting_ids: list[str] = None
     ) -> dict[str, str]:
         """获取用户会议信息 - 修复GROUP BY问题"""
         try:
@@ -413,7 +409,7 @@ class MeetingService(object):
             # 权限控制
             if user_role != "admin":
                 logger.info(f"用户 {current_user_id} 非admin角色，无权限查询数据")
-                return []
+                return {"file_name": "", "file_path": ""}
             participants_list = participants_list
 
             if current_user_id not in participants_list:
@@ -442,7 +438,7 @@ class MeetingService(object):
                 Meeting.id,
                 Meeting.date_time,
                 Meeting.title,
-                Meeting.duration_minutes  # 注意：若duration_minutes是计算字段，需确保在GROUP BY中或用聚合函数
+                Meeting.duration_minutes
             ).order_by(Meeting.date_time.desc())
 
             # 执行查询
@@ -483,7 +479,7 @@ class MeetingService(object):
             # 权限控制
             if user_role != "admin":
                 logger.info(f"用户 {current_user_id} 非admin角色，无权限查询数据")
-                return []
+                return {"file_name": "", "file_path": ""}
 
             agenda_ids = agenda_ids
 
@@ -505,8 +501,7 @@ class MeetingService(object):
                 literal("").label("投资类议题是否开展专项调研"),
                 literal("").label("投资类议题是否开展重大投资项目评价及反馈"),
                 # 2. case 表达式：达梦兼容 MySQL 语法，无需修改
-                case(
-                    (Agendas.is_board_meeting == 1, "是"),  # 核心修改：删除 []
+                case((Agendas.is_board_meeting == 1, "是"),
                     else_="否"
                 ).label("is_board_meeting"),
                 literal("").label("议题类型（原一览表要求）"),
@@ -557,8 +552,8 @@ class MeetingService(object):
                 User.company
             )
 
-            # 根据 agenda_ids 是否为空，动态添加过滤条件
-            if agenda_ids:  # 非空列表时，添加 in 条件
+            # 根据 agenda_ids 是否为空，动态添加过滤条件,非空列表时，添加 in 条件
+            if agenda_ids:
                 query = query.filter(Agendas.agenda_id.in_(agenda_ids))
 
             # 执行查询
@@ -605,7 +600,8 @@ class MeetingService(object):
             current_user_id_str = str(current_user_id)
         except (TypeError, ValueError):
             current_user_id_str = None
-        user_role = db.query(User.user_role).filter(User.id == current_user_id_str).scalar() if current_user_id_str is not None else None
+        user_role = db.query(User.user_role).filter(User.id == current_user_id_str).scalar() \
+            if current_user_id_str is not None else None
 
         query = db.query(Meeting)
 
@@ -637,7 +633,8 @@ class MeetingService(object):
             current_user_id_str = str(current_user_id)
         except (TypeError, ValueError):
             current_user_id_str = None
-        user_role = db.query(User.user_role).filter(User.id == current_user_id_str).scalar() if current_user_id_str is not None else None
+        user_role = db.query(User.user_role).filter(User.id == current_user_id_str).scalar() \
+            if current_user_id_str is not None else None
         query = db.query(Meeting)
         # 如果不是管理员，添加参与者验证条件
         if user_role != "admin":
@@ -648,7 +645,7 @@ class MeetingService(object):
         meeting = query.filter(Meeting.id == meeting_id).first()
         return meeting
 
-    async def get_meetings(self, db: Session, current_user_id: str) -> List[Meeting]:
+    async def get_meetings(self, db: Session, current_user_id: str) -> list[Meeting]:
         """获取当前用户可访问的会议列表
         - 管理员返回全部会议
         - 普通用户返回自己参与的会议
@@ -780,7 +777,8 @@ class MeetingService(object):
         db.query(Agendas).filter(Agendas.meeting_id == meeting_id).delete()
         # 删除所有关联的参会人员记录
         db.query(PersonSign).filter(PersonSign.meeting_id == meeting_id).delete()
-        user_role = db.query(User.user_role).filter(User.id == current_user_id_str).scalar() if current_user_id_str is not None else None
+        user_role = db.query(User.user_role).filter(User.id == current_user_id_str).scalar() \
+            if current_user_id_str is not None else None
         query = db.query(Meeting)
         if user_role != "admin":
             query = (
@@ -843,13 +841,14 @@ class MeetingService(object):
 
     async def get_transcription_message(self, db: Session, meeting_id: str):
         """Get all transcriptions for a meeting"""
-        query = db.query(Transcription).filter(Transcription.meeting_id == meeting_id).order_by(Transcription.created_time.desc())
+        query = db.query(Transcription).filter(Transcription.meeting_id == meeting_id).\
+            order_by(Transcription.created_time.desc())
         result = query.all()
         return result
 
     async def update_meeting_status(self, db: Session, meeting_id: str, status: str) -> bool:
         """Update meeting status"""
-        from time import timezone
+
         meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
         if not meeting:
             return False

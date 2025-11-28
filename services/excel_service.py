@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 import re
 
-def extract_row_number(cell_ref):
+def extract_row_number(cell_ref: str) ->int:
     """从单元格引用中提取行号，如 'A1' -> 1, 'Y2' -> 2"""
     # 使用正则表达式提取数字部分
     match = re.search(r'\d+', cell_ref)
@@ -24,7 +24,7 @@ def extract_row_number(cell_ref):
 class ExcelService(object):
     """通用Excel生成工具，支持自定义表头、标题、合并单元格及数据格式"""
 
-    def __init__(self, output_dir: str = "./uploads"):
+    def __init__(self, output_dir: str = "./uploads")->None:
         self.output_dir = Path(output_dir)
         self._ensure_output_dir()
 
@@ -99,15 +99,17 @@ class ExcelService(object):
 
     def create_excel(
             self,
-            data: List[Union[List, Dict]],  # 数据列表（支持列表或字典格式）
-            headers: List[str],  # 表头列表（如["姓名", "年龄"]）
+            data: list[Union[List, Dict]],  # 数据列表（支持列表或字典格式）
+            # 表头列表（如["姓名", "年龄"]）
+            headers: list[str],
             sheet_name: str = "Sheet1",  # 工作表名称
             title: Optional[str] = None,  # 表格标题（None则不设置）
             title_merge_range: str = "A1:G1",  # 标题合并范围（如"A1:C1"）
-            merge_cells: Optional[List[Tuple[str, str]]] = None,  # 额外合并单元格（如[("A2:B2", "姓名："), ...]）
-            wrap_text_columns: Optional[List[int]] = None,  # 需要自动换行的列索引（从1开始）
+            # 额外合并单元格（如[("A2:B2", "姓名："), ...]）
+            merge_cells: Optional[list[Tuple[str, str]]] = None,
+            wrap_text_columns: Optional[list[int]] = None,  # 需要自动换行的列索引（从1开始）
             filename_prefix: str = "data",  # 文件名前缀
-            date_format_columns: Optional[List[int]] = None  # 需要日期格式化的列索引（从1开始）
+            date_format_columns: Optional[list[int]] = None  # 需要日期格式化的列索引（从1开始）
     ) -> Path:
         """
         创建通用Excel文件
@@ -206,15 +208,17 @@ class ExcelService(object):
 # ------------------------------
 # 使用示例
 # ------------------------------
-def create_work_log(sample_data: List[Dict]):
+def create_work_log(sample_data: list[Dict]):
     # 1. 初始化生成器
     excel_gen = ExcelService(output_dir="./uploads")
 
     # 2. 准备数据（支持列表或字典格式）
     sample_data = [
-        {"日期": datetime(2023, 10, 1), "工作单位": "技术部", "工作内容": "开发Excel工具类\n处理各种边缘情况","工作成效":"未知说话人:然后我这个服务器再发到那个第三方，啊没有我通过那代理去转，转就转个意思 👤 说话人A: ",
+        {"日期": datetime(2023, 10, 1), "工作单位": "技术部", "工作内容": "开发Excel工具类\n处理各种边缘情况",
+         "工作成效":"未知说话人:然后我这个服务器再发到那个第三方，啊没有我通过那代理去转，转就转个意思 👤 说话人A: ",
          "工时": 8,"备注":"林新"},
-        {"日期": datetime(2023, 10, 2), "工作单位": "产品部", "工作内容": "需求评审会议", "工作成效":"未知说话人:然后我这个服务器再发到那个第三方，啊没有我通过那代理去转，转就转个意思 👤 说话人A: ",
+        {"日期": datetime(2023, 10, 2), "工作单位": "产品部", "工作内容": "需求评审会议",
+         "工作成效":"未知说话人:然后我这个服务器再发到那个第三方，啊没有我通过那代理去转，转就转个意思 👤 说话人A: ",
          "工时": 4,"备注":"林新"},
     ]
 
@@ -240,7 +244,7 @@ def create_work_log(sample_data: List[Dict]):
         filename_prefix="工作记录"
     )
 
-def create_ledger_info(sample_data: List[Dict]):
+def create_ledger_info(sample_data: list[Dict]):
     # 1. 初始化生成器
     excel_gen = ExcelService(output_dir="./uploads")
 
@@ -249,13 +253,16 @@ def create_ledger_info(sample_data: List[Dict]):
 
     # 3. 定义表头（决定列顺序）
     headers = ["议题编号（内部使用）", "议题名称","议题提出部门","适用治理主体权责清单文件名及文号","适用治理主体权责清单事项编号（含三重一大编号）及具体事项",
-               "议题决策程序(根据权责清单确定)","三重一大分类(根据权责清单中的三重一大编号判断)","三重一大系统事项编码*（按三重一大系统《企业'三重一大'事项清单采集指标》事项清单填写）","议题类型1（按权责清单中的'业务领域'填写）",
+               "议题决策程序(根据权责清单确定)","三重一大分类(根据权责清单中的三重一大编号判断)",
+               "三重一大系统事项编码*（按三重一大系统《企业'三重一大'事项清单采集指标》事项清单填写）","议题类型1（按权责清单中的'业务领域'填写）",
                "议题类型2","议题类型3","投资类议题金额（万元）","投资类议题是否开展专项调研","投资类议题是否开展重大投资项目评价及反馈","是否董事会授权","议题类型（原一览表要求）",
-               "是否涉及合规审核","是否涉及职工权益","是否属于依托治理型行权管控事项","是否党委前置研究讨论","是否召开专门委员会","是否报国资委*","会议时间*","会议名称*","会议形式*","主持人*","参会人*","领导参会详情",
-               "领导请假情况","应到人数","实到人数","投票同意","投票反对","投票弃权","投票结果","是否涉及回避原则","是否满足出席人数要求（原一览表要求）","纪委书记是否列席","总法律顾问/合规官是否列席","是否召开沟通会","列席部门/单位、具体人员"]
+               "是否涉及合规审核","是否涉及职工权益","是否属于依托治理型行权管控事项","是否党委前置研究讨论","是否召开专门委员会",
+               "是否报国资委*","会议时间*","会议名称*","会议形式*","主持人*","参会人*","领导参会详情",
+               "领导请假情况","应到人数","实到人数","投票同意","投票反对","投票弃权","投票结果",
+               "是否涉及回避原则","是否满足出席人数要求（原一览表要求）","纪委书记是否列席","总法律顾问/合规官是否列席","是否召开沟通会","列席部门/单位、具体人员"]
 
 
-    #"议题名称", "议题提出部门", "三重一大分类", "议题类型1", "议题类型2", "议题类型3", "是否董事会授权", "是否上报国资委", "会议时间", "会议名称", "会议形式", "主持人", "参会人", "应到人数", "实到人数"
+
     # 4. 定义合并单元格（可选）
     merge_cells = [
         ("A2:AY2", "统计时间：2025年11月6日 "),
@@ -285,5 +292,4 @@ def create_ledger_info(sample_data: List[Dict]):
 
 
 if __name__ == "__main__":
-    create_work_log()
-    #create_ledger_info([6, '公司领投', '南网', '', '', '', '重大项目安排', '', '党的建设', '审议类', '投资类', 0, '', '', '是', '', '', '', '', '', '', '是', '', '新的会议', '线上会议', '未知', '系统管理员,林新', '', '', 2, 1, '', '', '', '', '', '', '', '', '', ''])
+    create_work_log("hello world")

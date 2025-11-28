@@ -1,6 +1,5 @@
 # 标准库
-import uuid
-from datetime import datetime, timezone
+
 from typing import List, Optional, Dict
 
 # 第三方库
@@ -10,11 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
 
 # 自定义类
-from  models import Meeting, Participant, Transcription, PersonSign, User
-from schema import MeetingCreate,TranscriptionCreate, PersonSignCreate
+from  models import Meeting, Participant, PersonSign, User
+
 
 class SignInService(object):
-    async def get_people_sign_status(self, db: Session, meeting_id: str)-> List[PersonSign]:
+    async def get_people_sign_status(self, db: Session, meeting_id: str)-> list[PersonSign]:
         """查询所有人员的签到状态（从数据库）"""
         # 可添加排序、过滤等逻辑（如按姓名排序）
         # 1. 验证会议存在性（会议不存在直接抛404，而非返回None）
@@ -28,7 +27,7 @@ class SignInService(object):
         sign_result = db.query(PersonSign).filter(PersonSign.meeting_id==meeting_id).order_by(PersonSign.name).all()
         return sign_result
 
-    async def sign_person(self, db: Session, name: str, meeting_id: str, user_id: str) -> Dict[str, str]:
+    async def sign_person(self, db: Session, name: str, meeting_id: str, user_id: str) -> dict[str, str]:
         """
         处理人员签到逻辑（绑定会议维度，确保签到状态仅对当前会议生效）
         :param db: 数据库会话
@@ -94,7 +93,7 @@ class SignInService(object):
             "is_signed": user_meeting_sign.is_signed
         }
 
-    async def leave_person(self, db: Session, name: str, meeting_id: str, user_id: str) -> Dict[str, str]:
+    async def leave_person(self, db: Session, name: str, meeting_id: str, user_id: str) -> dict[str, str]:
         """
         处理指定会议的人员请假逻辑
         :param db: 数据库会话
@@ -157,7 +156,7 @@ class SignInService(object):
             "is_on_leave": user_meeting.is_on_leave
         }
 
-    async def close_meeting_sign(self, db: Session, meeting_id: str) -> Dict[str, str]:
+    async def close_meeting_sign(self, db: Session, meeting_id: str) -> dict[str, str]:
         """
         关闭指定会议的签到，重置该会议内所有人员的签到/请假状态
         :param db: 数据库会话

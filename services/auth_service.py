@@ -62,34 +62,31 @@ class AuthService(object):
 
     # --------------------------- 用户认证 ---------------------------
 
-    async def authenticate_user(self,
-                                db: Session,
-                                username: str,
-                                password: str,
-                                user_service: UserService) ->Optional[User]:
+    async def authenticate_user(
+            self,
+            db: Session,
+            username: str,
+            password: str,
+            user_service: UserService
+    ) -> Optional[User]:
         """用户认证：支持邮箱/手机号/用户名登录，校验密码并检查状态"""
         try:
-            # 使用UserService的统一登录标识符查找方法
-            user: User | None = await user_service.get_user_by_login_identifier(db, identifier=username)
+            user = await user_service.get_user_by_login_identifier(db, identifier=username)
 
             if not user:
                 logger.warning(f"认证失败：用户不存在 username={username}")
-                return None
-            # 修复 ColumnElement[bool] 类型错误：将比较结果转换为 Python 布尔值
-            if str(user.status) != UserStatus.ACTIVE.value:
+            elif str(user.status) != UserStatus.ACTIVE.value:
                 logger.warning(f"认证失败：用户状态为{user.status}，拒绝登录 user_id={user.id}")
-                return None
-
-            is_valid: bool = user_service.verify_password(user, plain_password=password)
-            if not is_valid:
+            elif not user_service.verify_password(user, plain_password=password):
                 logger.warning(f"认证失败：密码错误 user_id={user.id}")
-                return None
+            else:
+                logger.info(f"认证成功 user_id={user.id} username={username}")
+                return user  # 仅成功场景提前return
 
-            logger.info(f"认证成功 user_id={user.id} username={username}")
-            return user
         except Exception as e:
             logger.error(f"认证过程异常：{e}")
-            return None
+
+        return None  # 所有失败场景统一return None
 
     # --------------------------- 令牌生成 ---------------------------
     def _build_claims(self,
@@ -161,13 +158,7 @@ class AuthService(object):
 
     # --------------------------- 令牌验证 ---------------------------
     def verify_token(self, token: str, expected_type: str = "access") -> Optional[dict[str, Any]]:
-        """验证令牌有效性与类型，并检查黑名单。返回payload或None。
-        Args:
-            token: JWT令牌字符串
-            expected_type: 期望的令牌类型 (access/refresh)
-        Returns:
-            解码后的令牌载荷字典，验证失败时返回None
-        """
+        """验证令牌有效性与类型，并检查黑名单。返回payload或None。"""
         try:
             payload = jwt.decode(
                 token,
@@ -176,22 +167,21 @@ class AuthService(object):
                 audience=self.JWT_AUDIENCE,
                 issuer=self.JWT_ISSUER,
             )
+            # 扁平化条件判断，仅成功场景提前return
             if payload.get("type") != expected_type:
                 logger.warning(f"令牌类型不匹配：期待{expected_type}，实际{payload.get('type')}")
-                return None
+            elif payload.get("jti") in self.token_blacklist:
+                logger.warning(f"令牌已被撤销（黑名单）：jti={payload.get('jti')}")
+            else:
+                # 仅验证通过时return payload
+                return payload
 
-            jti = payload.get("jti")
-            if jti in self.token_blacklist:
-                logger.warning(f"令牌已被撤销（黑名单）：jti={jti}")
-                return None
-
-            return payload
         except JWTError as e:
             logger.warning(f"令牌验证失败：{e}")
-            return None
         except Exception as e:
             logger.error(f"令牌验证异常：{e}")
-            return None
+        # 所有失败场景统一return None
+        return None
 
     # --------------------------- 刷新与轮换 ---------------------------
     def refresh_access_token(self, refresh_token: str, user: User) -> Optional[tuple[str, str]]:
@@ -230,6 +220,7 @@ class AuthService(object):
         Returns:
             撤销成功返回True，失败返回False
         """
+        result=False
         try:
             payload = jwt.decode(
                 token,
@@ -241,16 +232,14 @@ class AuthService(object):
             jti: Any | None = payload.get("jti")
             if not jti:
                 logger.warning("撤销失败：令牌不含jti")
-                return False
             self.token_blacklist.add(jti)
             logger.info(f"令牌撤销成功 jti={jti} type={payload.get('type')} user_id={payload.get('sub')}")  # type和sub也可能不存在
-            return True
+            result = True
         except JWTError as e:
             logger.warning(f"撤销失败：令牌解析错误 {e}")
-            return False
         except Exception as e:
             logger.error(f"撤销令牌异常：{e}")
-            return False
+        return result
 
     # --------------------------- 便捷登录入口 ---------------------------
     async def login_and_issue(self,

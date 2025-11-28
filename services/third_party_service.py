@@ -7,18 +7,18 @@ import os
 
 logger = logging.getLogger(__name__)
 
-class ThirdPartyTokenService:
-    def __init__(self):
+class ThirdPartyTokenService(object):
+    def __init__(self)-> None:
         # 使用固定的配置值
         self.app_id =  os.getenv("THIRD_PARTY_APP_ID", "tainsureAssistant")
         self.app_secret = os.getenv("THIRD_PARTY_APP_SECRET", "sek9*2JxL8K6p#Lp=ia!-yX@0H0DDoJDDR8d#YGjml!p")
         self.base_url = os.getenv("THIRD_PARTY_BASE_URL", "https://ai.csg.cn/aihear-50-249")
-        
+
         # 保存默认配置（用于可能的覆盖）
         self.default_app_id = self.app_id
         self.default_app_secret = self.app_secret
         self.default_base_url = self.base_url
-        
+
     def _generate_access_token(self, app_id: Optional[str] = None, app_secret: Optional[str] = None) -> str:
         """
         根据文档规范生成access-token
@@ -28,18 +28,18 @@ class ThirdPartyTokenService:
         # 使用传入的参数或默认配置
         current_app_id = app_id or self.default_app_id
         current_app_secret = app_secret or self.default_app_secret
-        
+
         timestamp = str(int(time.time() * 1000))  # 当前时间戳(毫秒)
-        
+
         # 计算签名
         sign_str = f"{current_app_id}{current_app_secret}{timestamp}"
         sign = hashlib.md5(sign_str.encode('utf-8')).hexdigest()
-        
+
         # 构造access-token
         access_token = f"appId-{current_app_id}#timestamp-{timestamp}#sign-{sign}"
         return access_token
-    
-    def _construct_headers(self, app_id: Optional[str] = None, app_secret: Optional[str] = None) -> Dict[str, str]:
+
+    def _construct_headers(self, app_id: Optional[str] = None, app_secret: Optional[str] = None) -> dict[str, str]:
         """
         构造请求头
         """
@@ -50,21 +50,21 @@ class ThirdPartyTokenService:
             "access-token": access_token,
             "appId": current_app_id,
         }
-    
+
     async def get_third_party_token(
-        self, 
-        base_url: Optional[str] = None, 
-        app_id: Optional[str] = None, 
+        self,
+        base_url: Optional[str] = None,
+        app_id: Optional[str] = None,
         app_secret: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         请求第三方接口获取最新token
-        
+
         Args:
             base_url: 第三方服务的基础URL
             app_id: 应用ID
             app_secret: 应用密钥
-            
+
         Returns:
             包含token信息和过期时间的字典
         """
@@ -72,15 +72,15 @@ class ThirdPartyTokenService:
         self.app_id = app_id or self.default_app_id
         self.app_secret = app_secret or self.default_app_secret
         self.base_url = base_url or self.default_base_url
-        
+
         # 检查基础URL是否已设置，如果未设置则使用默认值，不再报错
         if not self.base_url:
             self.base_url = self.default_base_url
-        
+
         url = f"{self.base_url}/app/open/thridLogin"
-        
+
         headers = self._construct_headers(app_id, app_secret)
-        
+
         try:
             async with httpx.AsyncClient() as client:
                 logger.error(f"Requesting third party API: {url}, Headers: {headers}")
@@ -95,7 +95,6 @@ class ThirdPartyTokenService:
                         "data": "",
                         "map": {}
                     }
-                
                 # 解析响应
                 try:
                     response_data = response.json()
@@ -107,7 +106,7 @@ class ThirdPartyTokenService:
                         "data": "",
                         "map": {}
                     }
-                
+
                 # 兼容字符串或数字类型的业务 code
                 # 兼容字符串或数字类型的业务 code，并统一为整数
                 raw_code = response_data.get("code")
@@ -127,7 +126,7 @@ class ThirdPartyTokenService:
                         "data": "",
                         "map": {}
                     }
-                
+
                 # 提取token信息
                 token = response_data.get("data")
                 if not token:
@@ -138,7 +137,7 @@ class ThirdPartyTokenService:
                         "data": "",
                         "map": {}
                     }
-                
+
                 # 返回成功结果
                 return {
                     "code": 200,
@@ -146,7 +145,7 @@ class ThirdPartyTokenService:
                     "data": token,
                     "map": {}
                 }
-                
+
         except httpx.TimeoutException:
             logger.error("Third party API request timeout")
             return {
