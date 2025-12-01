@@ -98,7 +98,7 @@ class NotificationService(object):
                           subject: str,
                           html_content: str,
                           meeting: Meeting,
-                          attachment_path: Optional[str] = None):
+                          attachment_path: Optional[str] = None)->None:
 
         """Send individual email"""
         try:

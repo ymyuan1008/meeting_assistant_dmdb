@@ -3,6 +3,7 @@ from datetime import timedelta
 from minio import Minio
 from minio.error import S3Error
 import urllib3
+from typing import Optional
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -13,7 +14,7 @@ http_client = urllib3.PoolManager(
 )
 
 class MinioUploader(object):
-    def __init__(self, endpoint, access_key, secret_key, secure=False):
+    def __init__(self, endpoint, access_key, secret_key, secure=False) -> None:
         self.minio_client = Minio(
             endpoint,
             access_key=access_key,
@@ -22,7 +23,7 @@ class MinioUploader(object):
             http_client=http_client
         )
 
-    def create_bucket_if_not_exists(self, bucket_name):
+    def create_bucket_if_not_exists(self, bucket_name) ->bool:
         try:
             if not self.minio_client.bucket_exists(bucket_name):
                 self.minio_client.make_bucket(bucket_name)
@@ -31,7 +32,13 @@ class MinioUploader(object):
             print(f"MinIO 错误: {e}")
             return False
 
-    def upload_file(self, console_address, bucket_name, file_path, object_name, expires=timedelta(seconds=600)):
+    def upload_file(self,
+                        console_address,
+                        bucket_name,
+                        file_path,
+                        object_name,
+                        expires=timedelta(seconds=600)) -> [Optional[str], Optional[str]]:
+
         try:
             # 检查并创建存储桶
             if not self.create_bucket_if_not_exists(bucket_name):

@@ -86,7 +86,9 @@ class AuthService(object):
         except Exception as e:
             logger.error(f"认证过程异常：{e}")
 
-        return None  # 所有失败场景统一return None
+        # 所有失败场景统一return None
+        return None
+
 
     # --------------------------- 令牌生成 ---------------------------
     def _build_claims(self,

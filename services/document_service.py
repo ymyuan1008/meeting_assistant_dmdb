@@ -7,6 +7,8 @@ from concurrent.futures import ThreadPoolExecutor
 import pytz
 from datetime import datetime, timezone, timedelta
 
+
+
 # 第三方库
 from docx.shared import Inches, Pt
 from docx.enum.table import WD_TABLE_ALIGNMENT
@@ -125,13 +127,6 @@ class PDFDocumentService(BaseDocumentService):
         self.executor = ThreadPoolExecutor(max_workers=4)
         # 注册中文字体
         self.chinese_font_name = self._register_chinese_font()
-
-    import os
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-    import logging
-
-    logger = logging.getLogger(__name__)
 
     def _register_chinese_font(self) -> str:
         """注册中文字体"""
@@ -567,7 +562,7 @@ class DocumentService(object):
         # pdf_path = await self.pdf_service.generate_notification(meeting)
         return {"word": word_path}
 
-    async def generate_minutes(self, meeting: Meeting, transcriptions: Transcription):
+    async def generate_minutes(self, meeting: Meeting, transcriptions: Transcription)-> dict[str, Optional[str]]:
         """生成会议纪要（Word+PDF）"""
         word_path = await self.docx_service.generate_minutes(meeting, transcriptions)
         # pdf_path = await self.pdf_service.generate_minutes(meeting, transcriptions)

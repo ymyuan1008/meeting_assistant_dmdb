@@ -58,12 +58,12 @@ def generate_safe_filename(original_filename: str) -> str:
     unique_id = uuid.uuid4().hex
     return f"{unique_id}{ext}"
 
-def create_work_log(sample_data: List[Dict]):
+def create_work_log(sample_data: list[Dict]) ->None:
     # 1. 初始化生成器
     excel_gen = ExcelService(output_dir="./uploads")
 
     # 2. 准备数据（支持列表或字典格式）
-    sample_data = sample_data
+    sample_data = sample_data or []
 
     # 3. 定义表头（决定列顺序）
     headers = ["会议编号", "日期", "工作单位","工作事项",  "工作内容",  "工作成效", "工时", "备注"]
@@ -94,13 +94,12 @@ def create_work_log(sample_data: List[Dict]):
         filename_prefix="履职工作日志"
     )
 
-def create_ledger_info(sample_data: List[Dict]):
+def create_ledger_info(sample_data: list[Dict]) ->None:
     # 1. 初始化生成器
     excel_gen = ExcelService(output_dir="./uploads")
 
     # 2. 准备数据（支持列表或字典格式）
-    sample_data = sample_data
-    print("导出数据",sample_data)
+    sample_data = sample_data or []
 
     # 3. 定义表头（决定列顺序）
     headers = ["议题编号（内部使用）", "议题名称","议题提出部门","适用治理主体权责清单文件名及文号","适用治理主体权责清单事项编号（含三重一大编号）及具体事项",
@@ -123,7 +122,8 @@ def create_ledger_info(sample_data: List[Dict]):
     ]
 
     title_style = {
-        "font": {"bold": True},  # 核心：字体加粗
+        # 核心：字体加粗
+        "font": {"bold": True},
         # 可选：补充其他样式（如字体大小、颜色等）
         "font_size": 20,
         # "font_color": "000000"
@@ -245,10 +245,10 @@ class MeetingService(object):
             self,
             db: Session,
             current_user_id: str,
-            participants_list: Optional[List[str]] = None,
+            participants_list: Optional[list[str]] = None,
             skip: int = 0,
             limit: int = 100
-    ) -> List[DailyWorkResponse]:
+    ) -> list[DailyWorkResponse]:
         try:
             # 权限校验...（同前）
 
@@ -575,7 +575,6 @@ class MeetingService(object):
 
             # 执行查询
             results = query.all()
-            
             # 生成文件名
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"台账登记管理_{timestamp}.xlsx"
